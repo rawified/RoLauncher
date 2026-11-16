@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RoLauncher</title>
+  <script>
+    (function () {
+      var ui = localStorage.getItem("rolauncher.ui");
+      var here = location.pathname.endsWith("console.html") ? "console" : "classic";
+      if (ui && ui !== here) location.replace((ui === "console" ? "console.html" : "index.html") + location.hash);
+    })();
+  </script>
+  <link rel="icon" href="logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ===== Title bar ===== -->
+  <header class="titlebar">
+    <div class="tb-left">
+      <div class="brand">
+        <img class="brand-logo" src="logo.svg" alt="" />
+        <span class="brand-name">RoLauncher</span>
+        <svg class="chev" viewBox="0 0 24 24"><use href="#i-chev-down"/></svg>
+      </div>
+      <span class="tb-sep"></span>
+      <button class="tb-icon nodrag" id="navBack" title="Back"><svg viewBox="0 0 24 24"><use href="#i-arrow-left"/></svg></button>
+      <button class="tb-icon nodrag" id="navFwd" title="Forward"><svg viewBox="0 0 24 24"><use href="#i-arrow-right"/></svg></button>
+      <span class="crumb" id="crumb">Launchpad</span>
+    </div>
+    <div class="tb-game nodrag" id="tbGame" hidden>
+      <span class="live-dot"></span><img id="tbGameIcon" alt="" /><span id="tbGameName">Launching…</span><span class="muted" id="tbGameTime"></span><span class="more-games" id="tbGameMore" hidden></span>
+      <button class="btn leave" id="tbLeave"><svg viewBox="0 0 24 24"><use href="#i-logout"/></svg>Leave game</button>
+    </div>
+    <div class="tb-right">
+      <button class="pill-btn nodrag" id="tbSearch" title="Search games"><svg viewBox="0 0 24 24"><use href="#i-search"/></svg></button>
+      <button class="pill-btn nodrag" id="tbRefresh" title="Refresh"><svg viewBox="0 0 24 24"><use href="#i-refresh"/></svg></button>
+      <button class="pill-btn nodrag robux" id="tbRobux" title="Robux" hidden><svg viewBox="0 0 24 24"><use href="#i-robux"/></svg><span id="robuxCount">0</span></button>
+      <button class="pill-btn nodrag" id="tbFavCount" title="Favorites"><svg viewBox="0 0 24 24"><use href="#i-heart"/></svg><span id="favCount">0</span></button>
+      <button class="user-chip nodrag" id="userChip">
+        <img id="userAvatar" alt="" />
+        <span id="userName">Sign in</span>
+        <svg class="chev" viewBox="0 0 24 24"><use href="#i-chev-down"/></svg>
+      </button>
+      <button class="pill-btn nodrag" id="tbRecent"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg><span id="recentCount">0 recent</span></button>
+      <div class="win-ctrls nodrag">
+        <button data-win="minimize" title="Minimize"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+        <button data-win="maximize" title="Maximize"><svg viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1"/></svg></button>
+        <button data-win="close" class="close" title="Close"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell">
+    <!-- ===== Left rail ===== -->
+    <nav class="rail">
+      <div class="rail-top">
+        <button class="rail-btn active" data-page="launchpad" title="Launchpad"><svg viewBox="0 0 24 24"><use href="#i-rocket"/></svg></button>
+        <button class="rail-btn" data-page="explore" title="Explore"><svg viewBox="0 0 24 24"><use href="#i-gamepad"/></svg><span class="dot" id="exploreDot"></span></button>
+        <button class="rail-btn" data-page="search" title="Search"><svg viewBox="0 0 24 24"><use href="#i-globe"/></svg></button>
+        <button class="rail-btn" data-page="market" title="Market"><svg viewBox="0 0 24 24"><use href="#i-bag"/></svg></button>
+        <button class="rail-btn" data-page="avatar" title="Avatar"><svg viewBox="0 0 24 24"><use href="#i-shirt"/></svg></button>
+        <button class="rail-btn" data-page="favorites" title="Favorites"><svg viewBox="0 0 24 24"><use href="#i-heart"/></svg></button>
+        <button class="rail-btn" data-page="profile" title="Profiles"><svg viewBox="0 0 24 24"><use href="#i-id"/></svg></button>
+        <button class="rail-btn" data-page="friends" title="Friends"><svg viewBox="0 0 24 24"><use href="#i-users"/></svg></button>
+        <button class="rail-btn" data-page="history" title="History"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg></button>
+      </div>
+      <div class="rail-bottom">
+        <button class="rail-btn" id="railJoin" title="Join by Place ID"><svg viewBox="0 0 24 24"><use href="#i-hash"/></svg></button>
+        <button class="rail-btn" data-page="settings" title="Settings"><svg viewBox="0 0 24 24"><use href="#i-settings"/></svg></button>
+      </div>
+    </nav>
+
+    <!-- ===== Main content ===== -->
+    <main class="main" id="main">
+
+      <!-- Launchpad -->
+      <section class="page active" id="page-launchpad">
+        <div class="welcome-row">
+          <div class="welcome">Welcome Back Astronaut, <span class="welcome-user"><img id="welcomeAvatar" alt="" /><b id="welcomeName">Guest</b></span></div>
+          <button class="link" data-goto="explore">Explore the Universe</button>
+        </div>
+
+        <div class="hero">
+          <canvas id="stars"></canvas>
+          <div class="hero-art">
+            <div class="cube c1"></div><div class="cube c2"></div><div class="cube c3"></div>
+            <div class="rocket"><div class="rk-body"></div><div class="rk-window"></div><div class="rk-fin l"></div><div class="rk-fin r"></div><div class="rk-flame"></div></div>
+            <div class="bot"><div class="bot-head"></div><div class="bot-body"></div></div>
+          </div>
+          <div class="hero-text">
+            <h1>Welcome to RoLauncher <span class="emoji">🧑‍🚀</span></h1>
+            <p>🚀 Blast off with RoLauncher for an awesome Roblox experience.</p>
+          </div>
+        </div>
+
+        <div class="row-head">
+          <h2><svg viewBox="0 0 24 24"><use href="#i-play-circle"/></svg>Continue <span class="hint" title="Games you launched recently">?</span></h2>
+          <div class="row-tools">
+            <button class="link" data-goto="history">Visit Recent Games</button>
+            <button class="arrow" data-scroll="rowContinue" data-dir="-1"><svg viewBox="0 0 24 24"><use href="#i-chev-left"/></svg></button>
+            <button class="arrow" data-scroll="rowContinue" data-dir="1"><svg viewBox="0 0 24 24"><use href="#i-chev-right"/></svg></button>
+          </div>
+        </div>
+        <div class="card-row" id="rowContinue"></div>
+
+        <div class="row-head">
+          <h2><svg viewBox="0 0 24 24"><use href="#i-heart"/></svg>Favorites</h2>
+          <div class="row-tools">
+            <button class="link" data-goto="favorites">Browse Favorites</button>
+            <button class="arrow" data-scroll="rowFavorites" data-dir="-1"><svg viewBox="0 0 24 24"><use href="#i-chev-left"/></svg></button>
+            <button class="arrow" data-scroll="rowFavorites" data-dir="1"><svg viewBox="0 0 24 24"><use href="#i-chev-right"/></svg></button>
+          </div>
+        </div>
+        <div class="card-row" id="rowFavorites"></div>
+
+        <div class="row-head">
+          <h2><svg viewBox="0 0 24 24"><use href="#i-flame"/></svg>Trending Now</h2>
+          <div class="row-tools">
+            <button class="link" data-goto="explore">See All</button>
+            <button class="arrow" data-scroll="rowTrending" data-dir="-1"><svg viewBox="0 0 24 24"><use href="#i-chev-left"/></svg></button>
+            <button class="arrow" data-scroll="rowTrending" data-dir="1"><svg viewBox="0 0 24 24"><use href="#i-chev-right"/></svg></button>
+          </div>
+        </div>
+        <div class="card-row" id="rowTrending"></div>
+      </section>
+
+      <!-- Explore -->
+      <section class="page" id="page-explore">
+        <div class="page-title"><h1>Explore the Universe</h1><p>Charts straight from Roblox, refreshed live.</p></div>
+        <div id="exploreSorts"></div>
+      </section>
+
+      <!-- Search -->
+      <section class="page" id="page-search">
+        <div class="page-title"><h1>Search</h1><p>Find any experience on Roblox.</p></div>
+        <form class="search-box" id="searchForm">
+          <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
+          <input id="searchInput" placeholder="Search for experiences…" autocomplete="off" />
+          <button class="btn primary" type="submit">Search</button>
+        </form>
+        <div class="grid" id="searchResults"></div>
+      </section>
+
+      <!-- Market -->
+      <section class="page" id="page-market">
+        <div class="page-title row"><div><h1>Market</h1><p>Browse the Roblox avatar shop. Buying happens on Roblox's own item page.</p></div>
+          <div class="robux-big" id="marketRobux" hidden><svg viewBox="0 0 24 24"><use href="#i-robux"/></svg><span></span></div></div>
+        <form class="search-box" id="marketForm">
+          <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
+          <input id="marketInput" placeholder="Search items, bundles, emotes…" autocomplete="off" />
+          <select id="marketSort">
+            <option value="1">Most Favorited</option>
+            <option value="2">Bestselling</option>
+            <option value="3">Recently Updated</option>
+            <option value="4">Price: Low to High</option>
+            <option value="5">Price: High to Low</option>
+          </select>
+          <button class="btn primary" type="submit">Search</button>
+        </form>
+        <div class="chips" id="marketCats"></div>
+        <div class="grid market-grid" id="marketGrid"></div>
+        <div class="load-more"><button class="btn ghost" id="marketMore" hidden>Load more</button></div>
+      </section>
+
+      <!-- Avatar editor -->
+      <section class="page" id="page-avatar">
+        <div class="page-title"><h1>Avatar</h1><p>Dress up your character. Changes show up live in the preview before you save.</p></div>
+        <div class="avatar-signin empty" id="avatarSignin" hidden>Sign in with your Roblox account (Settings) to edit your avatar.</div>
+        <div class="avatar-layout" id="avatarLayout" hidden>
+          <div class="avatar-stage">
+            <div class="avatar-render"><img id="avRender" alt="" /><div class="av-busy" id="avBusy" hidden><span></span></div><div class="av-live" id="avLive" hidden>Preview</div></div>
+            <div class="seg" id="avType">
+              <button data-type="R6">R6</button><button data-type="R15">R15</button>
+            </div>
+            <div class="seg av-tabs" id="avStageTabs">
+              <button data-stage="colors" class="on">Skin</button><button data-stage="scale">Scale</button>
+            </div>
+            <div class="av-pane" id="avPaneColors">
+              <div class="av-parts" id="avParts"></div>
+              <div class="skin-row" id="skinRow"></div>
+              <label class="av-custom"><input type="color" id="skinCustom" /> <span>Custom color</span></label>
+            </div>
+            <div class="av-pane" id="avPaneScale" hidden>
+              <div id="avScales"></div>
+              <div class="muted small" id="avScaleNote"></div>
+            </div>
+            <div class="av-actions">
+              <button class="btn ghost" id="avReset">Undo changes</button>
+              <button class="btn primary" id="avSave">Save avatar</button>
+            </div>
+            <button class="btn ghost av-outfit-btn" id="avSaveOutfit">Save as outfit…</button>
+            <div class="muted small av-dirty" id="avDirty"></div>
+          </div>
+          <div class="avatar-items">
+            <div class="chips" id="avCats"></div>
+            <div class="grid av-grid" id="avGrid"></div>
+            <div class="load-more"><button class="btn ghost" id="avMore" hidden>Load more</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile viewer -->
+      <section class="page" id="page-profile">
+        <form class="search-box" id="profileForm">
+          <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
+          <input id="profileInput" placeholder="Look up any Roblox username or user ID…" autocomplete="off" />
+          <button class="btn primary" type="submit">View profile</button>
+        </form>
+        <div id="profileView"></div>
+      </section>
+
+      <!-- Favorites -->
+      <section class="page" id="page-favorites">
+        <div class="page-title"><h1>Favorites</h1><p>Hit the heart on any game to pin it here.</p></div>
+        <div class="grid" id="favGrid"></div>
+      </section>
+
+      <!-- History -->
+      <section class="page" id="page-history">
+        <div class="page-title row"><div><h1>Recent Games</h1><p>Everything you've launched from RoLauncher.</p></div><button class="btn ghost" id="clearHistory">Clear history</button></div>
+        <div class="grid" id="historyGrid"></div>
+      </section>
+
+      <!-- Friends -->
+      <section class="page" id="page-friends">
+        <div class="page-title"><h1>Friends</h1><p id="friendsHint">Sign in to load your Roblox friends automatically, or add people by username.</p></div>
+        <form class="search-box" id="addFriendForm">
+          <svg viewBox="0 0 24 24"><use href="#i-user-plus"/></svg>
+          <input id="addFriendInput" placeholder="Roblox username…" autocomplete="off" />
+          <button class="btn primary" type="submit">Add Friend</button>
+        </form>
+        <div class="friend-list big" id="friendsPageList"></div>
+      </section>
+
+      <!-- Settings -->
+      <section class="page" id="page-settings">
+        <div class="page-title"><h1>Settings</h1><p>Tune your launcher.</p></div>
+        <div class="settings">
+          <div class="set-card">
+            <h3>Interface</h3>
+            <p class="muted small">Pick a look. Everything else (accounts, favorites, playtime) is shared between them.</p>
+            <div class="ui-pick" id="uiPick">
+              <button data-ui="classic"><span class="ui-prev classic"><i></i><b></b><em></em></span>Classic</button>
+              <button data-ui="console"><span class="ui-prev console"><i></i><b></b><em></em></span>Console</button>
+            </div>
+          </div>
+          <div class="set-card">
+            <h3>Roblox Accounts</h3>
+            <div class="account-box" id="accountBox"></div>
+            <p class="muted small">Signing in happens on roblox.com's own login page. RoLauncher never sees your password; the session stays in this PC's launcher profile so games launch on your account.</p>
+            <details class="guest">
+              <summary class="muted small">Or just show an avatar without signing in</summary>
+              <form class="inline-form" id="accountForm">
+                <input id="accountInput" placeholder="Roblox username" autocomplete="off" />
+                <button class="btn ghost" type="submit">Use as guest</button>
+              </form>
+            </details>
+          </div>
+          <div class="set-card">
+            <h3>Appearance</h3>
+            <label class="toggle"><input type="checkbox" id="setStars" checked /><span></span>Animated starfield</label>
+            <div class="accent-row" id="accentRow"></div>
+          </div>
+          <div class="set-card">
+            <h3>Playing</h3>
+            <label class="toggle"><input type="checkbox" id="setEmbed" /><span></span>Play inside the launcher window <span class="tag">Experimental</span></label>
+            <label class="toggle"><input type="checkbox" id="setCloseOnLeave" /><span></span>Close Roblox and return here when I leave a game</label>
+            <label class="select-row">When I close RoLauncher while a game is running
+              <select id="setCloseBehavior">
+                <option value="ask">Ask me</option>
+                <option value="close">Close the game too</option>
+                <option value="keep">Keep the game running</option>
+              </select>
+            </label>
+            <label class="toggle"><input type="checkbox" id="setMinimize" /><span></span>Minimize launcher while playing (when not playing inside it)</label>
+            <label class="toggle"><input type="checkbox" id="setMulti" /><span></span>Allow several Roblox games at once <span class="tag">Experimental</span></label>
+            <p class="muted small">Lets you run more than one Roblox window, for example one per account. Close all Roblox windows before turning it on. Only one game can be shown inside the launcher; the others open in their own windows.</p>
+          </div>
+          <div class="set-card">
+            <h3>Discord</h3>
+            <label class="toggle"><input type="checkbox" id="setDiscord" /><span></span>Show what I'm playing on my Discord profile</label>
+            <div class="discord-box" id="discordBox">
+              <div class="discord-status" id="discordStatus"></div>
+              <label class="toggle"><input type="checkbox" id="setDiscordBrowsing" /><span></span>Also show when I'm just browsing the launcher</label>
+              <label class="toggle"><input type="checkbox" id="setDiscordJoin" /><span></span>Add a "Join server" button for public servers</label>
+              <details class="guest">
+                <summary class="muted small">Advanced: use your own Discord application</summary>
+                <p class="muted small">Leave this empty to show up as <b>RoLauncher</b>. To show a different name, create an application at <a href="https://discord.com/developers/applications" data-ext>discord.com/developers/applications</a> and paste its Application ID here.</p>
+                <form class="inline-form" id="discordForm">
+                  <input id="discordId" placeholder="Application ID (optional)" inputmode="numeric" autocomplete="off" />
+                  <button class="btn primary" type="submit">Save</button>
+                </form>
+              </details>
+              <p class="muted small">Discord needs to be open on this PC (the desktop app). Your status only goes to your own Discord app; RoLauncher doesn't send it anywhere else.</p>
+            </div>
+          </div>
+          <div class="set-card">
+            <h3>Updates</h3>
+            <p class="muted" id="updVersion">RoLauncher</p>
+            <label class="toggle"><input type="checkbox" id="setAutoUpdate" /><span></span>Check for updates when RoLauncher starts</label>
+            <div class="upd-row"><button class="btn ghost" id="updCheck">Check for updates</button><span class="muted small" id="updStatus"></span></div>
+            <p class="muted small">Updates come from <a href="#" id="updRepo">RoLauncher on GitHub</a>. Your sign-ins and settings are kept.</p>
+          </div>
+          <div class="set-card">
+            <h3>Data</h3>
+            <p class="muted">Recent games, favorites and friends are stored locally on this PC.</p>
+            <button class="btn danger" id="resetAll">Reset all launcher data</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===== Right panel ===== -->
+    <aside class="side">
+      <div class="panel friends-panel">
+        <div class="panel-head">
+          <h3>Friends <span class="muted" id="friendsOnline">(0 online)</span></h3>
+          <button class="link" data-goto="friends">View all <svg viewBox="0 0 24 24"><use href="#i-chev-right"/></svg></button>
+        </div>
+        <div class="friend-list" id="sideFriends"></div>
+      </div>
+
+      <div class="panel spotlight" id="spotlight">
+        <div class="spot-img"><img id="spotImg" alt="" /><span class="badge"><svg viewBox="0 0 24 24"><use href="#i-sparkle"/></svg>SPOTLIGHT</span><span class="spot-rating" id="spotRating"></span></div>
+        <div class="spot-info">
+          <div><div class="spot-name" id="spotName">Loading…</div><div class="muted small" id="spotBy"></div></div>
+          <div class="spot-actions">
+            <button class="icon-btn" id="spotPlay" title="Play"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg></button>
+            <button class="icon-btn" id="spotView" title="Details"><svg viewBox="0 0 24 24"><use href="#i-eye"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel quickjoin">
+        <svg class="watermark" viewBox="0 0 24 24"><use href="#i-mark"/></svg>
+        <h3>Quick Launch</h3>
+        <p class="muted small">Paste a game link or Place ID to blast off instantly.</p>
+        <form class="inline-form" id="quickForm">
+          <input id="quickInput" placeholder="roblox.com/games/… or 920587237" autocomplete="off" />
+          <button class="btn primary" type="submit"><svg viewBox="0 0 24 24"><use href="#i-rocket"/></svg></button>
+        </form>
+        <div class="now-playing" id="nowPlaying"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== Game modal ===== -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-card">
+      <button class="modal-close" id="modalClose"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      <div class="modal-banner"><img id="mBanner" alt="" /></div>
+      <div class="modal-body">
+        <div class="modal-head">
+          <img class="modal-icon" id="mIcon" alt="" />
+          <div class="modal-titles"><h2 id="mName"></h2><div class="muted" id="mCreator"></div></div>
+          <select class="play-as" id="mPlayAs" title="Play as" hidden></select>
+          <button class="btn play" id="mPlay"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Play</button>
+          <button class="btn ghost square" id="mFav" title="Favorite"><svg viewBox="0 0 24 24"><use href="#i-heart"/></svg></button>
+          <button class="btn ghost square" id="mWeb" title="Open on roblox.com"><svg viewBox="0 0 24 24"><use href="#i-external"/></svg></button>
+        </div>
+        <div class="tabs" id="mTabs">
+          <button class="tab on" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="playtime"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg>Playtime</button>
+        </div>
+        <div class="tab-panel" id="tab-overview">
+          <div class="stats" id="mStats"></div>
+          <p class="desc" id="mDesc"></p>
+        </div>
+        <div class="tab-panel" id="tab-playtime" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Market item modal ===== -->
+  <div class="modal glass" id="updModal" hidden>
+    <div class="modal-card upd-card">
+      <div class="upd-head"><img src="logo.svg" alt="" /><div><h2 id="updTitle">Update available</h2><div class="muted small" id="updSub"></div></div></div>
+      <div class="upd-notes" id="updNotes"></div>
+      <div class="upd-progress" id="updProgress" hidden><span id="updBar"></span></div>
+      <div class="upd-actions"><a href="#" class="muted small" id="updPage">See it on GitHub</a><span></span><button class="btn ghost" id="updLater">Later</button><button class="btn primary" id="updNow">Update now</button></div>
+    </div>
+  </div>
+  <div class="modal glass" id="avDialog" hidden>
+    <div class="modal-card av-dialog">
+      <h2 id="avDlgTitle"></h2>
+      <p class="muted small" id="avDlgText"></p>
+      <input class="input" id="avDlgInput" maxlength="50" />
+      <div class="av-dlg-actions"><button class="btn ghost" id="avDlgCancel">Cancel</button><button class="btn primary" id="avDlgOk">OK</button></div>
+    </div>
+  </div>
+  <div class="modal glass" id="itemModal" hidden>
+    <div class="item-card">
+      <button class="modal-close" id="itemClose"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      <div class="item-media"><img id="iImg" alt="" /><span class="owned-badge" id="iOwned" hidden><svg viewBox="0 0 24 24"><use href="#i-check"/></svg>Owned</span></div>
+      <div class="item-info">
+        <span class="kind-chip" id="iKind"></span>
+        <h2 id="iName"></h2>
+        <div class="muted" id="iCreator"></div>
+        <div class="item-price" id="iPrice"></div>
+        <div class="item-meta" id="iMeta"></div>
+        <p class="desc" id="iDesc"></p>
+        <div class="buy-box" id="buyBox"></div>
+        <button class="link" id="iWeb"><svg viewBox="0 0 24 24"><use href="#i-external"/></svg>View on roblox.com</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="launching" id="launching" hidden>
+    <canvas id="launchStars"></canvas>
+    <div class="launch-card">
+      <img id="lIcon" alt="" />
+      <h2 id="lName">Launching…</h2>
+      <p class="muted" id="lStatus">Starting Roblox</p>
+      <div class="launch-bar"><span></span></div>
+      <button class="btn ghost" id="lCancel">Cancel</button>
+    </div>
+  </div>
+
+  <div class="acct-menu" id="acctMenu" hidden></div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== Icon sprite ===== -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-mark" viewBox="0 0 24 24"><path d="M10.3 6.9l9.1 3.6c.8.3.9 1.4.1 1.8l-8 5.4c-.8.5-1.8-.1-1.8-1V7.8c0-.7.8-1.2 1.6-.9z"/><path d="M8.6 12.6l-4.8 1.3M8.2 9.7l-3.3.9M9.3 15.6l-3.3.9"/><path d="M19.4 3.6l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+      <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+      <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+      <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/></symbol>
+      <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9-8.6C1.6 8.4 3.4 5 6.8 5c2 0 3.4 1.1 5.2 3 1.8-1.9 3.2-3 5.2-3 3.4 0 5.2 3.4 3.8 6.4C19 15.6 12 20 12 20z"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M5 15c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2.2 2.2 0 0 0-2.9-.1z"/><path d="M12 15l-3-3a22 22 0 0 1 2-4A13 13 0 0 1 22 2c0 2.7-.8 7.5-6 11a22 22 0 0 1-4 2z"/><path d="M9 12H4s.5-3 2-4c1.6-1.1 5 0 5 0M12 15v5s3-.5 4-2c1.1-1.6 0-5 0-5"/></symbol>
+      <symbol id="i-gamepad" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6"/><circle cx="18" cy="13.5" r=".6"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></symbol>
+      <symbol id="i-user-plus" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M19 8v6M16 11h6"/></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-hash" viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18"/></symbol>
+      <symbol id="i-play-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l5 3.5-5 3.5z"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5l13 7.5-13 7.5z" fill="currentColor"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.7 7-6.5 0-4.5-4-6.5-4.5-10.5C12 7 10 9.5 10 12c-1.2-.8-2-2-2-3.5C6 10.2 5 12.7 5 15.5 5 19.3 8 22 12 22z"/></symbol>
+      <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l2 7 7 2-7 2-2 7-2-7-7-2 7-2z" fill="currentColor"/></symbol>
+      <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+      <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+      <symbol id="i-thumb" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8c1.7 0 3 1.3 3 3v3h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18 20H7"/></symbol>
+      <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></symbol>
+      <symbol id="i-robux" viewBox="0 0 24 24"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"/><path d="M12 7.5l3.9 2.25v4.5L12 16.5l-3.9-2.25v-4.5z"/></symbol>
+      <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+      <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M8 3l4 2 4-2 5 3-2 5-3-1v11H8V10l-3 1-2-5z"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17a3.5 3.5 0 0 1 7 0M15 9.5h3.5M15 13h3.5"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    </defs>
+  </svg>
+
+  <script src="app.js"></script>
+  <script src="dropdown.js"></script>
+</body>
+</html>

@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<!--
+  RoLauncher cover image. Original artwork (no third-party logos or game art).
+  Render: msedge --headless --window-size=1920,1080 --screenshot=cover.png cover.html
+  Add  ?wide  to the URL for the 1280x640 link-preview layout.
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    position: relative;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    color: #fff;
+    background:
+      radial-gradient(60% 80% at 78% 30%, rgba(139, 92, 246, .55), transparent 60%),
+      radial-gradient(50% 70% at 95% 95%, rgba(6, 182, 212, .45), transparent 60%),
+      radial-gradient(45% 60% at 10% 100%, rgba(99, 102, 241, .35), transparent 65%),
+      linear-gradient(160deg, #0b1024 0%, #070914 55%, #05060c 100%);
+  }
+  #stars { position: absolute; inset: 0; }
+
+  .wrap { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding: 0 7.5vw; }
+  .brand { position: relative; z-index: 2; }
+  .mark { width: 15vh; height: 15vh; filter: drop-shadow(0 2.4vh 5vh rgba(99, 102, 241, .55)); }
+  h1 { font-size: 14vh; line-height: 1; font-weight: 800; letter-spacing: -.5vh; margin-top: 3.4vh; }
+  h1 span { background: linear-gradient(90deg, #fff 0%, #c7d2fe 55%, #67e8f9 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .tag { text-wrap: balance; max-width: 44vw; font-size: 3.7vh; color: rgba(226, 232, 255, .82); margin-top: 2.2vh; font-weight: 500; }
+  .chips { display: flex; flex-wrap: wrap; gap: 1.4vh; margin-top: 4.6vh; max-width: 46vw; }
+  .chip { display: inline-flex; align-items: center; gap: 1.1vh; padding: 1.25vh 2.2vh; border-radius: 99px; font-size: 2.25vh; font-weight: 600;
+          background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(10px); }
+  .chip svg { width: 2.5vh; height: 2.5vh; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Right side: a tilted wall of glassy "game" tiles drawn from simple shapes. */
+  .stage { position: relative; height: 100vh; }
+  .wall { position: absolute; right: -4vw; top: 50%; width: 62vh; height: 62vh; transform: translateY(-50%) rotate(-12deg); }
+  .tile { position: absolute; width: 18vh; height: 18vh; border-radius: 4.2vh; overflow: hidden;
+          box-shadow: 0 3vh 7vh rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .16); }
+  .tile svg { width: 100%; height: 100%; display: block; }
+  .tile.big { width: 28vh; height: 28vh; border-radius: 6vh; box-shadow: 0 0 0 .55vh #fff, 0 4vh 9vh rgba(0, 0, 0, .55); }
+  .t1 { left: 0;     top: 0; }
+  .t2 { left: 21vh;  top: -4vh; }
+  .t3 { left: 42vh;  top: 2vh; opacity: .9; }
+  .t4 { left: -2vh;  top: 21vh; }
+  .t5 { left: 19vh;  top: 18vh; }
+  .t6 { left: 50vh;  top: 24vh; }
+  .t7 { left: 4vh;   top: 42vh; opacity: .9; }
+  .t8 { left: 25vh;  top: 49vh; }
+  .t9 { left: 46vh;  top: 45vh; opacity: .85; }
+  .play-pill { position: absolute; left: 21vh; top: 50.5vh; display: none; }
+
+  /* little "now playing" card floating over the wall */
+  .np { position: absolute; right: 3vw; bottom: 9vh; display: flex; align-items: center; gap: 1.8vh; padding: 1.6vh 2.4vh 1.6vh 1.6vh; border-radius: 2.6vh;
+        background: rgba(18, 20, 32, .72); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(16px); box-shadow: 0 3vh 6vh rgba(0, 0, 0, .5); z-index: 3; }
+  .np .ic { width: 7vh; height: 7vh; border-radius: 1.7vh; overflow: hidden; }
+  .np b { display: block; font-size: 2.3vh; }
+  .np span { font-size: 1.85vh; color: rgba(226, 232, 255, .7); }
+  .np .dot { width: 1.3vh; height: 1.3vh; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 .5vh rgba(34, 197, 94, .25); margin-left: 1vh; }
+
+  /* 2:1 link-preview layout */
+  body.wide .wrap { grid-template-columns: 1.15fr .85fr; padding: 0 6vw; }
+  body.wide h1 { font-size: 15.5vh; }
+  body.wide .tag { font-size: 4.3vh; }
+  body.wide .chip { font-size: 2.6vh; }
+  body.wide .wall { right: -10vw; }
+  body.wide .np { display: none; }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset=".55" stop-color="#8B5CF6"/><stop offset="1" stop-color="#06B6D4"/></linearGradient>
+    <linearGradient id="g-sun" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f59e0b"/><stop offset="1" stop-color="#ef4444"/></linearGradient>
+    <linearGradient id="g-sea" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <linearGradient id="g-leaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#0d9488"/></linearGradient>
+    <linearGradient id="g-rose" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb7185"/><stop offset="1" stop-color="#a21caf"/></linearGradient>
+    <linearGradient id="g-night" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#334155"/><stop offset="1" stop-color="#0f172a"/></linearGradient>
+    <linearGradient id="g-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#d97706"/></linearGradient>
+    <radialGradient id="g-shine" cx=".25" cy=".15" r=".8"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <div class="brand">
+    <!-- the RoLauncher mark (same geometry as logo.svg) -->
+    <svg class="mark" viewBox="0 0 256 256">
+      <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#g-brand)"/>
+      <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#g-shine)"/>
+      <g stroke="#fff" stroke-linecap="round">
+        <line x1="96.1" y1="136" x2="45.9" y2="149.5" stroke-width="15" stroke-opacity=".92"/>
+        <line x1="88.8" y1="109" x2="54" y2="118.3" stroke-width="13" stroke-opacity=".6"/>
+        <line x1="103.4" y1="163" x2="68.6" y2="172.3" stroke-width="13" stroke-opacity=".6"/>
+      </g>
+      <polygon points="110,76 110,164 202,120" transform="rotate(-15 156 120)" fill="#fff" stroke="#fff" stroke-width="20" stroke-linejoin="round"/>
+      <path d="M206 44 L211 57 L224 62 L211 67 L206 80 L201 67 L188 62 L201 57 Z" fill="#fff" fill-opacity=".92"/>
+      <circle cx="228" cy="94" r="5" fill="#fff" fill-opacity=".6"/>
+    </svg>
+    <h1><span>RoLauncher</span></h1>
+    <div class="tag">Your games, accounts and servers in one beautiful launcher.</div>
+    <div class="chips">
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M7 4.5l13 7.5-13 7.5z"/></svg>Play &amp; join servers</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Multiple accounts</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Playtime tracking</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/></svg>Market &amp; avatar</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 4z"/></svg>Discord status</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="wall">
+      <!-- Each tile is an abstract scene made from basic shapes. -->
+      <div class="tile t1"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-sun)"/><circle cx="68" cy="34" r="16" fill="#fff7d6" opacity=".9"/><path d="M0 78 L30 52 L52 70 L72 56 L100 76 V100 H0Z" fill="#7c2d12" opacity=".75"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t2"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-sea)"/><path d="M0 64 q12 -8 25 0 t25 0 t25 0 t25 0 V100 H0Z" fill="#fff" opacity=".25"/><path d="M0 76 q12 -8 25 0 t25 0 t25 0 t25 0 V100 H0Z" fill="#1e3a8a" opacity=".55"/><path d="M44 30 l14 22 h-28z" fill="#fff" opacity=".9"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t3"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-rose)"/><g fill="#fff" opacity=".9"><rect x="22" y="44" width="16" height="16" rx="3"/><rect x="42" y="30" width="16" height="30" rx="3"/><rect x="62" y="20" width="16" height="40" rx="3"/></g><rect x="14" y="66" width="72" height="6" rx="3" fill="#fff" opacity=".5"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t4"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-leaf)"/><circle cx="34" cy="62" r="18" fill="#14532d" opacity=".6"/><circle cx="62" cy="54" r="24" fill="#166534" opacity=".7"/><rect x="58" y="70" width="6" height="18" fill="#3f2a14" opacity=".8"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile big t5"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-brand)"/><path d="M0 70 L22 58 L40 66 L62 48 L82 60 L100 52 V100 H0Z" fill="#1e1b4b" opacity=".55"/><g transform="translate(50 42)"><rect x="-22" y="-22" width="44" height="44" rx="8" fill="#fff" opacity=".18"/><path d="M-7 -11 L13 0 L-7 11Z" fill="#fff"/></g><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t6"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-gold)"/><path d="M50 22 l8 17 18 2 -13 12 4 18 -17 -9 -17 9 4 -18 -13 -12 18 -2z" fill="#fff" opacity=".92"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t7"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-night)"/><g fill="#fff"><circle cx="20" cy="22" r="1.6"/><circle cx="44" cy="14" r="1.2"/><circle cx="76" cy="26" r="1.8"/><circle cx="62" cy="40" r="1.1"/><circle cx="30" cy="44" r="1.3"/></g><circle cx="70" cy="70" r="18" fill="#a5b4fc" opacity=".85"/><circle cx="64" cy="64" r="4" fill="#6366f1" opacity=".6"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t8"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-sea)"/><rect x="18" y="38" width="64" height="30" rx="15" fill="#0b1024" opacity=".75"/><circle cx="34" cy="53" r="6" fill="#fff"/><g fill="#fff"><circle cx="66" cy="48" r="3"/><circle cx="72" cy="54" r="3"/></g><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+      <div class="tile t9"><svg viewBox="0 0 100 100"><rect width="100" height="100" fill="url(#g-rose)"/><path d="M50 74 C20 54 26 28 42 30 C47 31 50 36 50 38 C50 36 53 31 58 30 C74 28 80 54 50 74Z" fill="#fff" opacity=".9"/><rect width="100" height="100" fill="url(#g-shine)"/></svg></div>
+    </div>
+
+    <div class="np">
+      <div class="ic"><svg viewBox="0 0 100 100" width="100%" height="100%"><rect width="100" height="100" fill="url(#g-brand)"/><path d="M40 30 L70 50 L40 70Z" fill="#fff"/></svg></div>
+      <div><b>Now playing</b><span>Server 3 · 18/24 · 2 friends</span></div>
+      <i class="dot"></i>
+    </div>
+  </div>
+</div>
+
+<script>
+  if (location.search.includes("wide")) document.body.classList.add("wide");
+  const c = document.getElementById("stars"), x = c.getContext("2d");
+  c.width = innerWidth; c.height = innerHeight;
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; // fixed seed: same stars every render
+  for (let i = 0; i < (innerWidth * innerHeight) / 2600; i++) {
+    const z = rnd(); x.fillStyle = `rgba(255,255,255,${.15 + z * .7})`;
+    const s = .6 + z * 1.6; x.fillRect(rnd() * innerWidth, rnd() * innerHeight, s, s);
+  }
+</script>
+</body>
+</html>

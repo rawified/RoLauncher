@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>RoLauncher</AssemblyName>
+    <RootNamespace>RoLauncher</RootNamespace>
+    <NoWarn>MSB3277</NoWarn>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.1.0</Version>
+    <Product>RoLauncher</Product>
+    <Company>RoLauncher</Company>
+    <Description>A launcher for Roblox</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.*" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The installer is its own project; build output lands in dist\. Keep both out of this one. -->
+  <ItemGroup>
+    <Compile Remove="installer\**;dist\**" />
+    <None Remove="installer\**;dist\**" />
+    <EmbeddedResource Remove="installer\**;dist\**" />
+  </ItemGroup>
+
+</Project>

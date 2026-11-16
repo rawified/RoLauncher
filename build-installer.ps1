@@ -1,7 +1,7 @@
 <#
   Builds dist\RoLauncherSetup-<version>.exe
 
-    1. Publishes RoLauncher (self-contained, so the PC doesn't need .NET installed) to dist\app
+    1. Publishes RoLauncher (self-contained, so the PC doesn't need .NET installed) to obj\publish-app
     2. Zips it to dist\payload.zip
     3. Publishes installer\Setup.csproj as one .exe with that zip embedded
 
@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $root = $PSScriptRoot
 $dist = Join-Path $root "dist"
-$app  = Join-Path $dist "app"
+$app  = Join-Path $root "obj\publish-app"   # staging, kept out of dist so a running copy there never blocks a build
 $zip  = Join-Path $dist "payload.zip"
 
 New-Item -ItemType Directory -Force $dist | Out-Null

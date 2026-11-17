@@ -758,21 +758,10 @@
     };
   }
 
-  /* ---------- Dock for running games + live badges ---------- */
-  function renderDock() {
-    const list = running();
-    const dock = $("#psDock");
-    dock.hidden = !list.length;
-    dock.innerHTML = list.map((se) => `<div class="d-game">
-        <img src="${esc(se.g.icon) || PLACEHOLDER}" alt=""/>
-        <div><div class="d-name">${esc(se.g.name)}</div><div class="d-sub">${se.accountId && accounts.list.length > 1 ? esc(accountName(se.accountId)) + " · " : ""}<span data-clock="${se.sid}">${clock(se.started)}</span></div></div>
-        <button class="d-leave" data-leave="${se.sid}">Leave</button>
-      </div>`).join("");
-  }
+  /* ---------- Live badges on running games (the top bar shows the game itself) ---------- */
   const baseSessions = renderSessions;
   renderSessions = function () {
     baseSessions();
-    renderDock();
     if (ps.list.length) {
       const live = new Set(running().map((x) => x.g.id));
       $$("#psTiles .ps-tile[data-i]").forEach((t) => {

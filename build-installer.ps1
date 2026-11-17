@@ -5,10 +5,10 @@
     2. Zips it to dist\payload.zip
     3. Publishes installer\Setup.csproj as one .exe with that zip embedded
 
-  Usage:  .\build-installer.ps1            (version 1.2.0)
-          .\build-installer.ps1 -Version 1.2.0
+  Usage:  .\build-installer.ps1            (version 1.3.0)
+          .\build-installer.ps1 -Version 1.3.0
 #>
-param([string]$Version = "1.2.0")
+param([string]$Version = "1.3.0")
 $ErrorActionPreference = "Stop"
 
 $root = $PSScriptRoot

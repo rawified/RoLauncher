@@ -41,6 +41,8 @@ const host = (() => {
     patch: (url, body) => call("fetch", { url, method: "PATCH", body }),
     launch: (placeId, jobId, opts = {}) => call("launch", { placeId: String(placeId), jobId, ...opts }),
     leaveGame: (sid) => call("leaveGame", sid ? { sid } : {}),
+    gameView: (sid, action) => call("gameView", { sid, action }),
+    sessions: () => call("sessions"),
     accounts: () => call("accounts"),
     addAccount: () => call("addAccount"),
     switchAccount: (accountId) => call("switchAccount", { accountId: String(accountId) }),
@@ -80,7 +82,7 @@ const store = {
   data: null,
   load() {
     try { this.data = JSON.parse(localStorage.getItem(this.key)) || {}; } catch { this.data = {}; }
-    const settings = Object.assign({ stars: true, minimize: true, embed: true, closeOnLeave: true, closeBehavior: "ask", autoUpdate: true, autoInstall: true, accent: ACCENTS[0] }, this.data.settings);
+    const settings = Object.assign({ stars: true, minimize: true, embed: true, closeOnLeave: true, closeBehavior: "ask", autoUpdate: true, accent: ACCENTS[0] }, this.data.settings);
     settings.discord = Object.assign({ enabled: false, clientId: "", browsing: true, join: true }, settings.discord);
     this.data = Object.assign({ user: null, recent: [], favorites: [], friends: [], playtime: {}, seeded: false }, this.data, { settings });
     return this;
@@ -278,6 +280,7 @@ async function play(universeId, jobId, accountId, extra) {
     r = await host.launch(g.rootPlaceId, jobId, {
       embed: S.settings.embed, closeOnLeave: S.settings.closeOnLeave, minimize: S.settings.minimize,
       accountId: entry.accountId ? String(entry.accountId) : undefined,
+      meta: { g: { id: g.id, name: g.name, icon: g.icon, rootPlaceId: g.rootPlaceId, creator: g.creator }, private: entry.private }, // kept by the host so a reloaded page (interface switch) can pick the game back up
       ...(extra || {}), // { accessCode } or { linkCode } for private servers
     });
   } catch (e) {
@@ -391,14 +394,21 @@ function renderSessions() {
   const top = newestSession();
   const running = [...sessions.values()].filter((x) => x.started);
   $("#tbGame").hidden = !top || !top.started;
+  document.body.classList.toggle("in-game", !$("#tbGame").hidden);
   $("#crumb").hidden = !$("#tbGame").hidden;
   if (top && top.started) {
     $("#tbGameIcon").src = top.g.icon || PLACEHOLDER;
     $("#tbGameName").textContent = top.g.name + (accounts.list.length > 1 && top.accountId ? ` · ${accountName(top.accountId)}` : "");
+    $("#tbGame").title = $("#tbGameName").textContent;
     $("#tbGameTime").textContent = clock(top.started);
     $("#tbGameMore").hidden = running.length < 2;
     $("#tbGameMore").textContent = `+${running.length - 1} more`;
   }
+  // Minimize tucks an in-launcher game away; Continue playing brings it (or a separate game window) back.
+  const hasWin = !!(top && top.started && top.windowed);
+  $("#tbMin").hidden = !hasWin || !top.embedded || top.hidden;
+  $("#tbContinue").hidden = !hasWin || (top.embedded && !top.hidden);
+  document.body.classList.toggle("game-hidden", hasWin && !!top.embedded && !!top.hidden);
   const np = $("#nowPlaying");
   if (running.length) {
     np.innerHTML = `<div class="muted small" style="margin-bottom:6px">Now playing</div><div class="np-list">${running.map((se) => `
@@ -499,7 +509,7 @@ function onGameEvent(m) {
   switch (m.state) {
     case "starting": status("Starting Roblox"); break;
     case "process": se.started = Date.now(); status("Roblox is loading"); break;
-    case "window": doneLaunching(); startPlayClock(se); break;
+    case "window": se.windowed = true; se.embedded = !!m.embedded; se.hidden = false; doneLaunching(); startPlayClock(se); break;
     case "joining": status("Joining server"); if (m.jobId) se.jobId = m.jobId; if (m.placeId) se.placeId = Number(m.placeId); break;
     case "joined": doneLaunching(); startPlayClock(se); break;
     case "left": toast(`You left ${se.g.name}`); break;
@@ -518,6 +528,39 @@ function onGameEvent(m) {
   renderSessions();
 }
 $("#tbLeave").onclick = () => { const top = newestSession(); if (top) host.leaveGame(top.sid); };
+async function setGameView(action, quiet = false) {
+  const top = newestSession();
+  if (!top) return;
+  try {
+    const r = await host.gameView(top.sid, action);
+    top.embedded = r.embedded;
+    top.hidden = r.embedded && r.hidden;
+    renderSessions();
+    if (action === "hide" && r.embedded && !quiet) toast("Game minimized — it keeps running. Press “Continue playing” to go back.");
+  } catch (e) { toast(e.message, true); }
+}
+// True while an in-launcher game is showing and covering the pages.
+function gameCovering() { const top = newestSession(); return !!(top && top.windowed && top.embedded && !top.hidden); }
+$("#tbMin").onclick = () => setGameView("hide");
+$("#tbContinue").onclick = () => setGameView("show");
+
+// Games keep running when the page reloads (switching between Classic and Console),
+// so ask the host which ones are open and pick them back up: top bar, timers, Continue playing.
+async function restoreSessions() {
+  if (!host.available) return;
+  const list = await host.sessions().catch(() => []);
+  for (const s of list || []) {
+    if (sessions.has(s.sid)) continue;
+    const meta = s.meta || {};
+    const g = (meta.g && meta.g.id && cache.games.get(meta.g.id)) || meta.g || { id: 0, name: "Roblox", icon: "" };
+    sessions.set(s.sid, {
+      g, sid: s.sid, accountId: s.accountId || 0, started: s.started || 0, playStart: s.playStart || 0,
+      jobId: s.jobId || null, placeId: s.placeId ? Number(s.placeId) : g.rootPlaceId, private: !!meta.private,
+      windowed: !!s.windowed, embedded: !!s.embedded, hidden: !!s.hidden,
+    });
+  }
+  if (sessions.size) renderSessions();
+}
 $("#lCancel").onclick = () => {
   if (launching && launching.sid) host.leaveGame(launching.sid);
   launching = null; hideLaunching();
@@ -580,12 +623,13 @@ $("#mWeb").onclick = async () => {
 /* =========================================================
    Navigation
    ========================================================= */
-const TITLES = { profile: "Profiles", launchpad: "Launchpad", explore: "Explore", search: "Search", market: "Market", avatar: "Avatar", favorites: "Favorites", friends: "Friends", history: "Recent Games", settings: "Settings" };
+const TITLES = { profile: "Profiles", trade: "Trading", launchpad: "Launchpad", explore: "Explore", search: "Search", market: "Market", avatar: "Avatar", favorites: "Favorites", friends: "Friends", history: "Recent Games", settings: "Settings" };
 let currentPage = "launchpad";
 const hist = { back: [], fwd: [] };
 
 function go(page, { record = true } = {}) {
   if (!TITLES[page]) return;
+  if (gameCovering()) setGameView("hide", true); // going to a page while playing minimizes the game
   if (record && page !== currentPage) { hist.back.push(currentPage); hist.fwd = []; }
   currentPage = page;
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === "page-" + page));
@@ -608,7 +652,7 @@ document.addEventListener("click", (e) => {
 $("#tbSearch").onclick = () => { go("search"); setTimeout(() => $("#searchInput").focus(), 50); };
 $("#tbFavCount").onclick = () => go("favorites");
 $("#tbRecent").onclick = () => go("history");
-$("#userChip").onclick = () => { renderAccountMenu(); $("#acctMenu").hidden = !$("#acctMenu").hidden; };
+$("#userChip").onclick = () => { if (gameCovering()) setGameView("hide", true); renderAccountMenu(); $("#acctMenu").hidden = !$("#acctMenu").hidden; };
 $("#tbRefresh").onclick = () => { cache.games.clear(); cache.banners.clear(); sortsCache = null; renderPage(currentPage); loadSpotlight(); refreshFriends(); toast("Refreshed"); };
 $("#railJoin").onclick = () => $("#quickInput").focus();
 $$(".win-ctrls button").forEach((b) => (b.onclick = () => host.win(b.dataset.win)));
@@ -679,6 +723,7 @@ function renderPage(page) {
     case "market": if (!market.loaded) loadMarket(true); break;
     case "avatar": openAvatarEditor(); break;
     case "profile": if (!profile.id) renderProfileHome(); break;
+    case "trade": renderTrade(); break;
   }
 }
 
@@ -1004,8 +1049,6 @@ function renderSettings() {
   $("#setCloseBehavior").value = S.settings.closeBehavior || "ask";
   $("#setMulti").checked = !!S.settings.multi;
   $("#setAutoUpdate").checked = S.settings.autoUpdate !== false;
-  $("#setAutoInstall").checked = S.settings.autoInstall !== false;
-  $("#setAutoInstall").disabled = S.settings.autoUpdate === false;
   const dc = S.settings.discord;
   $("#setDiscord").checked = !!dc.enabled;
   $("#discordId").value = dc.clientId || "";
@@ -1999,16 +2042,20 @@ async function openProfile(id) {
           <div><b>${followers ? fmt(followers.count) : "–"}</b><span>Followers</span></div>
           <div><b>${following ? fmt(following.count) : "–"}</b><span>Following</span></div>
           <div><b>${age}</b><span>Joined ${created.toLocaleDateString(undefined, { dateStyle: "medium" })}</span></div>
+          <div class="pf-rap" title="Recent average price of all their limiteds"><b id="pfRap">…</b><span>RAP</span></div>
         </div>
         <p class="pf-bio">${esc(user.description || "")}</p>
         <div class="pf-actions">
           ${canJoin ? `<button class="btn play" id="pfJoin"><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Join game</button>` : ""}
           ${isMine && id !== accounts.activeId ? `<button class="btn primary" data-acct-switch="${id}"><svg viewBox="0 0 24 24"><use href="#i-swap"/></svg>Switch to this account</button>` : ""}
           ${!isMine && !S.friends.includes(id) && !robloxFriendIds.includes(id) ? `<button class="btn ghost" id="pfAdd"><svg viewBox="0 0 24 24"><use href="#i-user-plus"/></svg>Add to my friends list</button>` : ""}
+          ${signedIn() && id !== S.user.id ? `<button class="btn ghost" id="pfTrade"><svg viewBox="0 0 24 24"><use href="#i-swap"/></svg>Trade</button>` : ""}
           <button class="btn ghost" id="pfWeb"><svg viewBox="0 0 24 24"><use href="#i-external"/></svg>Open on Roblox</button>
         </div>
       </div>
     </div>
+    <div class="pf-section" id="pfWearSec" hidden><h3>Currently wearing <span class="muted" id="pfWearCount"></span></h3><div class="grid market-grid pf-wear" id="pfWear"></div></div>
+    <div class="pf-section" id="pfLimSec" hidden><h3>Limiteds <span class="muted" id="pfLimCount"></span></h3><div class="trade-items pf-lims" id="pfLims"></div></div>
     ${names.length ? `<div class="pf-section"><h3>Past usernames</h3><div class="pf-chips">${names.map((n) => `<span class="pf-chip" style="padding-left:10px">${esc(n)}</span>`).join("")}</div></div>` : ""}
     ${rbadges && rbadges.length ? `<div class="pf-section"><h3>Roblox badges</h3><div class="pf-chips">${rbadges.map((b) => `<span class="pf-chip" title="${esc(b.description)}"><img src="${esc(b.imageUrl)}" alt=""/>${esc(b.name)}</span>`).join("")}</div></div>` : ""}
     <div class="pf-section" id="pfFavSec" hidden><h3>Favorite games</h3><div class="card-row" id="pfFavs"></div></div>
@@ -2023,6 +2070,9 @@ async function openProfile(id) {
   if (canJoin) $("#pfJoin").onclick = () => play(p.universeId, p.gameId);
   if ($("#pfAdd")) $("#pfAdd").onclick = () => { S.friends.push(id); store.save(); refreshFriends(); $("#pfAdd").remove(); toast(`Added ${user.displayName}`); };
   $("#pfWeb").onclick = () => host.open(`https://www.roblox.com/users/${id}/profile`);
+  if ($("#pfTrade")) $("#pfTrade").onclick = () => { go("trade"); openCompose({ id: user.id, name: user.name, displayName: user.displayName }); };
+  loadProfileWearing(id, token);
+  loadProfileRap(id, token);
   $$("#pfGroups [data-group]").forEach((el) => (el.onclick = () => host.open(`https://www.roblox.com/communities/${el.dataset.group}`)));
 
   // Slower / optional sections load after the header is up.
@@ -2060,6 +2110,446 @@ async function openProfile(id) {
   });
 }
 
+/** "Currently wearing" on a profile: the same item cards as the Market, opening the same item pop-up. */
+async function loadProfileWearing(id, token) {
+  const av = await host.get(`https://avatar.roblox.com/v1/users/${id}/avatar`).catch(() => null);
+  const assets = (av && av.assets) || [];
+  if (token !== profile.token || !assets.length) return;
+  const [det, th] = await Promise.all([
+    host.post("https://catalog.roblox.com/v1/catalog/items/details", { items: assets.map((a) => ({ itemType: "Asset", id: a.id })) }).catch(() => null),
+    host.get(`https://thumbnails.roblox.com/v1/assets?assetIds=${assets.map((a) => a.id).join(",")}&size=150x150&format=Png&returnPolicy=PlaceHolder`).catch(() => null),
+  ]);
+  if (token !== profile.token) return;
+  const dmap = new Map(((det && det.data) || []).map((d) => [d.id, d]));
+  const tmap = new Map(((th && th.data) || []).map((t) => [t.targetId, t.imageUrl]));
+  const pretty = (s) => String(s || "Item").replace(/([a-z])([A-Z])/g, "$1 $2");
+  const items = assets.map((a) => {
+    const d = Object.assign({ id: a.id, itemType: "Asset", name: a.name, creatorName: "Roblox" }, dmap.get(a.id) || {});
+    d.itemType = "Asset";
+    if (!d.taxonomy || !d.taxonomy.length) d.taxonomy = [{ taxonomyName: pretty(a.assetType && a.assetType.name) }];
+    market.items.set("Asset" + d.id, d);
+    return d;
+  });
+  $("#pfWearSec").hidden = false;
+  $("#pfWearCount").textContent = `(${items.length})`;
+  $("#pfWear").innerHTML = items.map((i) => itemHTML(i, tmap.get(i.id))).join("");
+  $("#pfWear").onclick = (e) => { const el = e.target.closest("[data-iid]"); if (el) openItem(el.dataset.item, Number(el.dataset.iid)); };
+}
+
+/** RAP total in the profile header, plus their most valuable limiteds. */
+async function loadProfileRap(id, token) {
+  try {
+    const list = await collectibles(id, () => token === profile.token);
+    if (token !== profile.token) return;
+    const total = rapOf(list);
+    $("#pfRap").textContent = fmt(total);
+    $("#pfRap").title = `${total.toLocaleString()} Robux · ${list.length} limited${list.length === 1 ? "" : "s"}`;
+    if (!list.length) return;
+    const top = [...list].sort((a, b) => (b.recentAveragePrice || 0) - (a.recentAveragePrice || 0)).slice(0, 12);
+    await itemThumbs(top.map((i) => i.itemTarget));
+    if (token !== profile.token) return;
+    $("#pfLimSec").hidden = false;
+    $("#pfLimCount").textContent = list.length > top.length ? `(top ${top.length} of ${list.length})` : `(${list.length})`;
+    $("#pfLims").innerHTML = top.map((i) => tradeItemHTML(i)).join("");
+  } catch (e) {
+    if (token !== profile.token) return;
+    $("#pfRap").textContent = "Private";
+    $("#pfRap").title = "Their inventory is private, so their RAP can't be counted.";
+  }
+}
+
+/* =========================================================
+   Trading (limiteds) + RAP
+   ========================================================= */
+const trade = { tab: "Inbound", cursor: null, busy: false, token: 0, vtoken: 0, cur: null, c: null };
+const TRADE_STATUS = {
+  Open: "Open", Pending: "Pending", Completed: "Completed", Expired: "Expired", Declined: "Declined", Countered: "Countered",
+  RejectedDueToError: "Failed", Processing: "Processing", InterventionRequired: "Under review", TwoStepVerificationRequired: "Needs 2-step verification",
+};
+const CANT_TRADE = {
+  CallingUserIneligible: "Your account can't trade right now (Roblox needs Premium and trading enabled).",
+  TargetUserIneligible: "This player can't trade right now (they may not have Premium).",
+  CannotTradeWithSelf: "You can't trade with yourself.",
+  CallingUserPrivacySettingsRestricted: "Your Roblox privacy settings don't allow trading with this player.",
+  CallingUserAgeCheckRequired: "Roblox needs you to verify your age before trading.",
+};
+const MAX_TRADE_ITEMS = 4;
+const rbx = (n) => `<span class="rbx">${ROBUX_SVG}${Number(n || 0).toLocaleString()}</span>`;
+const itemThumbCache = new Map();
+const thumbKey = (t) => (t && t.itemType === "Bundle" ? "Bundle" : "Asset") + (t ? t.targetId : "");
+const thumbOf = (t) => itemThumbCache.get(thumbKey(t)) || PLACEHOLDER;
+
+async function itemThumbs(targets) {
+  const todo = targets.filter((t) => t && !itemThumbCache.has(thumbKey(t)));
+  const assets = uniq(todo.filter((t) => t.itemType !== "Bundle").map((t) => t.targetId));
+  const bundles = uniq(todo.filter((t) => t.itemType === "Bundle").map((t) => t.targetId));
+  const put = (prefix) => (r) => { for (const t of (r && r.data) || []) itemThumbCache.set(prefix + t.targetId, t.imageUrl); };
+  await Promise.all([
+    ...chunk(assets, 100).map((p) => host.get(`https://thumbnails.roblox.com/v1/assets?assetIds=${p.join(",")}&size=150x150&format=Png&returnPolicy=PlaceHolder`).then(put("Asset")).catch(() => {})),
+    ...chunk(bundles, 50).map((p) => host.get(`https://thumbnails.roblox.com/v1/bundles/thumbnails?bundleIds=${p.join(",")}&size=150x150&format=Png`).then(put("Bundle")).catch(() => {})),
+  ]);
+}
+
+function tradeItemHTML(i, attrs = "", cls = "") {
+  return `<div class="t-item ${cls}" ${attrs} title="${esc(i.itemName)}${i.serialNumber ? ` · #${i.serialNumber}` : ""}">
+    <div class="t-thumb"><img src="${esc(thumbOf(i.itemTarget))}" alt=""/>${i.serialNumber ? `<span class="t-serial">#${i.serialNumber}</span>` : ""}${i.isOnHold ? `<span class="t-hold">On hold</span>` : ""}</div>
+    <div class="t-name">${esc(i.itemName)}</div>
+    <div class="t-rap">${rbx(i.recentAveragePrice)}</div>
+  </div>`;
+}
+const rapOf = (items) => items.reduce((s, i) => s + (i.recentAveragePrice || 0), 0);
+function totalHTML(items, robux) {
+  return `<span>RAP ${rbx(rapOf(items))}</span>${robux ? `<span>+ ${rbx(robux)} Robux</span>` : ""}`;
+}
+
+/** Every collectible a user owns (needs their inventory to be public). */
+async function collectibles(uid, alive = () => true) {
+  const out = [];
+  let cursor = "";
+  for (let i = 0; i < 25 && alive(); i++) {
+    const p = new URLSearchParams({ limit: "100", sortOrder: "Desc" });
+    if (cursor) p.set("cursor", cursor);
+    const r = await host.get(`https://inventory.roblox.com/v1/users/${uid}/assets/collectibles?${p}`);
+    out.push(...((r && r.data) || []));
+    cursor = r && r.nextPageCursor;
+    if (!cursor) break;
+  }
+  return out.map((c) => ({ ...c, itemName: c.name, itemTarget: { itemType: "Asset", targetId: String(c.assetId) } }));
+}
+
+function renderTrade() {
+  const ok = signedIn();
+  $("#tradeSignin").hidden = ok;
+  $("#tradeBody").hidden = !ok;
+  $("#tradeNew").hidden = !ok;
+  if (!ok) return;
+  loadTrades(true);
+  refreshTradeCount();
+  const token = trade.token;
+  collectibles(S.user.id).then((list) => {
+    if (token !== trade.token) return;
+    $("#tradeMyRap").hidden = false;
+    $("#tradeMyRap").innerHTML = `<span class="muted small">Your RAP</span>${rbx(rapOf(list))}<span class="muted small">${list.length} limited${list.length === 1 ? "" : "s"}</span>`;
+  }).catch(() => {});
+}
+
+async function refreshTradeCount() {
+  if (!signedIn()) return;
+  const r = await host.get("https://trades.roblox.com/v1/trades/Inbound/count").catch(() => null);
+  const n = (r && r.count) || 0;
+  $("#ttInbound").hidden = !n;
+  $("#ttInbound").textContent = n;
+  const dot = $("#tradeDot");
+  if (dot) dot.classList.toggle("on", n > 0);
+}
+
+$("#tradeTabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tt]");
+  if (!b || b.dataset.tt === trade.tab) return;
+  trade.tab = b.dataset.tt;
+  $$("#tradeTabs [data-tt]").forEach((x) => x.classList.toggle("on", x === b));
+  loadTrades(true);
+});
+$("#tradeMore").onclick = () => loadTrades(false);
+
+async function loadTrades(reset) {
+  if (!signedIn()) return;
+  const token = reset ? ++trade.token : trade.token;
+  if (!reset && trade.busy) return;
+  trade.busy = true;
+  const list = $("#tradeList");
+  if (reset) { trade.cursor = null; list.innerHTML = `<div class="trade-row skeleton"></div>`.repeat(4); }
+  try {
+    const p = new URLSearchParams({ limit: "25", sortOrder: "Desc" });
+    if (!reset && trade.cursor) p.set("cursor", trade.cursor);
+    const r = await host.get(`https://trades.roblox.com/v1/trades/${trade.tab}?${p}`);
+    if (token !== trade.token) return;
+    const rows = (r && r.data) || [];
+    trade.cursor = r && r.nextPageCursor;
+    await api.headshots(rows.map((t) => t.user && t.user.id));
+    if (token !== trade.token) return;
+    const html = rows.map(tradeRowHTML).join("");
+    const empty = { Inbound: "No trade offers waiting for you.", Outbound: "You haven't sent any open trades.", Completed: "No completed trades yet.", Inactive: "No declined or expired trades." }[trade.tab];
+    if (reset) list.innerHTML = html || `<div class="empty">${empty}</div>`;
+    else list.insertAdjacentHTML("beforeend", html);
+    $("#tradeMore").hidden = !trade.cursor;
+  } catch (e) {
+    if (reset && token === trade.token) list.innerHTML = `<div class="empty">Couldn't load trades (${esc(e.message)}).</div>`;
+  } finally { if (token === trade.token) trade.busy = false; }
+}
+
+function tradeRowHTML(t) {
+  const u = t.user || {};
+  const status = TRADE_STATUS[t.status] || t.status || "";
+  const when = new Date(t.created).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const exp = t.isActive && t.expiration ? ` · expires ${new Date(t.expiration).toLocaleDateString(undefined, { dateStyle: "medium" })}` : "";
+  return `<button class="trade-row" data-trade="${t.id}">
+    <img src="${esc(cache.heads.get(u.id) || PLACEHOLDER)}" alt=""/>
+    <div class="fi"><div class="fn">${esc(u.displayName)} <span class="muted">@${esc(u.name)}</span></div><div class="fs">${esc(when)}${exp}</div></div>
+    <span class="t-status s-${esc(String(t.status).toLowerCase())}">${esc(status)}</span>
+    <svg viewBox="0 0 24 24"><use href="#i-chev-right"/></svg>
+  </button>`;
+}
+$("#tradeList").addEventListener("click", (e) => {
+  const r = e.target.closest("[data-trade]");
+  if (r) openTrade(r.dataset.trade);
+});
+
+/** Trade details, split into my side and theirs. */
+async function tradeDetails(id) {
+  const t = await host.get(`https://trades.roblox.com/v2/trades/${id}`);
+  const a = t.participantAOffer || {}, b = t.participantBOffer || {};
+  const mineIsA = a.user && a.user.id === S.user.id;
+  return { id, status: t.status, mine: mineIsA ? a : b, theirs: mineIsA ? b : a };
+}
+
+async function openTrade(id) {
+  const m = $("#tradeModal");
+  const token = ++trade.vtoken;
+  $("#tvTitle").textContent = "Loading trade…";
+  $("#tvSub").textContent = "";
+  $("#tvHead").src = PLACEHOLDER;
+  $("#tvGive").innerHTML = $("#tvGet").innerHTML = $("#tvGiveTotal").innerHTML = $("#tvGetTotal").innerHTML = $("#tvActions").innerHTML = "";
+  m.hidden = false;
+  try {
+    const t = await tradeDetails(id);
+    const mine = t.mine.items || [], theirs = t.theirs.items || [];
+    await Promise.all([itemThumbs([...mine, ...theirs].map((i) => i.itemTarget)), api.headshots([t.theirs.user.id])]);
+    if (token !== trade.vtoken) return;
+    trade.cur = t;
+    const u = t.theirs.user;
+    $("#tvHead").src = cache.heads.get(u.id) || PLACEHOLDER;
+    $("#tvTitle").textContent = `Trade with ${u.displayName}`;
+    $("#tvSub").textContent = `@${u.name} · ${TRADE_STATUS[t.status] || t.status}`;
+    $("#tvGive").innerHTML = mine.map((i) => tradeItemHTML(i)).join("") || `<div class="muted small">Nothing</div>`;
+    $("#tvGet").innerHTML = theirs.map((i) => tradeItemHTML(i)).join("") || `<div class="muted small">Nothing</div>`;
+    $("#tvGiveTotal").innerHTML = totalHTML(mine, t.mine.robux);
+    $("#tvGetTotal").innerHTML = totalHTML(theirs, t.theirs.robux);
+    const diff = rapOf(theirs) - rapOf(mine);
+    const open = t.status === "Open";
+    $("#tvActions").innerHTML = `<span class="t-diff ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "+" : "−"}${Math.abs(diff).toLocaleString()} RAP for you</span>`
+      + `<button class="btn ghost" data-tv="profile">View profile</button>`
+      + (open && trade.tab === "Inbound" ? `<button class="btn danger" data-tv="decline">Decline</button><button class="btn ghost" data-tv="counter">Counter</button><button class="btn primary" data-tv="accept">Accept</button>` : "")
+      + (open && trade.tab === "Outbound" ? `<button class="btn danger" data-tv="decline">Cancel trade</button>` : "");
+  } catch (e) {
+    if (token === trade.vtoken) { $("#tvTitle").textContent = "Couldn't load this trade"; $("#tvSub").textContent = e.message; }
+  }
+}
+$("#tradeClose").onclick = () => ($("#tradeModal").hidden = true);
+$("#tradeModal").addEventListener("click", (e) => { if (e.target.id === "tradeModal") e.target.hidden = true; });
+
+function tradeError(e) {
+  const msg = e.message || String(e);
+  if (/challenge|verif|two.?step|2sv/i.test(msg)) {
+    toast("Roblox wants you to confirm this with 2-step verification — finishing it on roblox.com.", true);
+    host.open("https://www.roblox.com/trades");
+  } else toast(`Roblox said: ${msg}`, true);
+}
+
+$("#tvActions").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-tv]");
+  const t = trade.cur;
+  if (!b || !t) return;
+  const who = t.theirs.user.displayName;
+  switch (b.dataset.tv) {
+    case "profile": $("#tradeModal").hidden = true; openProfile(t.theirs.user.id); break;
+    case "counter": $("#tradeModal").hidden = true; openCompose(t.theirs.user, t); break;
+    case "accept": {
+      const ok = await avDialog({ title: `Accept trade with ${who}?`, text: `You give ${rapOf(t.mine.items || []).toLocaleString()} RAP${t.mine.robux ? ` + ${t.mine.robux.toLocaleString()} Robux` : ""} and get ${rapOf(t.theirs.items || []).toLocaleString()} RAP${t.theirs.robux ? ` + ${t.theirs.robux.toLocaleString()} Robux` : ""}. Trades can't be undone.`, input: false, ok: "Accept trade" });
+      if (!ok) return;
+      b.disabled = true;
+      try { await host.post(`https://trades.roblox.com/v1/trades/${t.id}/accept`, {}); toast("Trade accepted! Roblox is processing it."); $("#tradeModal").hidden = true; loadTrades(true); refreshTradeCount(); }
+      catch (err) { b.disabled = false; tradeError(err); }
+      break;
+    }
+    case "decline": {
+      const cancel = trade.tab === "Outbound";
+      const ok = await avDialog({ title: cancel ? "Cancel this trade?" : `Decline ${who}'s trade?`, input: false, ok: cancel ? "Cancel trade" : "Decline" });
+      if (!ok) return;
+      b.disabled = true;
+      try { await host.post(`https://trades.roblox.com/v1/trades/${t.id}/decline`, {}); toast(cancel ? "Trade cancelled." : "Trade declined."); $("#tradeModal").hidden = true; loadTrades(true); refreshTradeCount(); }
+      catch (err) { b.disabled = false; tradeError(err); }
+      break;
+    }
+  }
+});
+
+/* ---- New trade / counter ---- */
+$("#tradeNew").onclick = () => openCompose(null);
+
+function openCompose(partner, counterOf = null) {
+  if (!signedIn()) { toast("Sign in first (Settings).", true); return go("settings"); }
+  trade.c = { partner: null, counter: counterOf, give: new Map(), get: new Map(), mine: [], theirs: [], token: 0 };
+  $("#tcTitle").textContent = counterOf ? "Counter offer" : "New trade";
+  $("#tcSub").textContent = "Pick who you want to trade with.";
+  $("#tcHead").src = PLACEHOLDER;
+  $("#tcUserForm").hidden = !!partner;
+  $("#tcUser").value = "";
+  $("#tcGrid").hidden = $("#tcOffer").hidden = true;
+  $("#tcGiveRobux").value = $("#tcGetRobux").value = "";
+  $("#tcMineFilter").value = $("#tcTheirsFilter").value = "";
+  $("#tcNote").textContent = "";
+  $("#tcSend").textContent = counterOf ? "Send counter" : "Send trade";
+  updateOffer();
+  $("#tradeCompose").hidden = false;
+  if (partner) setPartner(partner);
+  else setTimeout(() => $("#tcUser").focus(), 30);
+}
+
+$("#tcUserForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("#tcUser").value.trim().replace(/^@/, "");
+  if (!q) return;
+  try {
+    const u = /^\d+$/.test(q) ? (await api.users([Number(q)]))[0] : await api.userByName(q);
+    if (!u) return toast("No Roblox user with that name.", true);
+    setPartner(u);
+  } catch (err) { toast(err.message, true); }
+});
+
+async function setPartner(u) {
+  const c = trade.c;
+  if (u.id === S.user.id) return toast("You can't trade with yourself.", true);
+  const token = ++c.token;
+  c.partner = u;
+  c.give.clear(); c.get.clear();
+  api.headshots([u.id]).then(() => { if (token === c.token) $("#tcHead").src = cache.heads.get(u.id) || PLACEHOLDER; });
+  $("#tcTitle").textContent = `${c.counter ? "Counter" : "Trade"} with ${u.displayName}`;
+  $("#tcSub").textContent = `@${u.name} · loading items…`;
+  $("#tcTheirsTitle").textContent = `${u.displayName}'s items`;
+  $("#tcGrid").hidden = $("#tcOffer").hidden = false;
+  $("#tcMine").innerHTML = $("#tcTheirs").innerHTML = `<div class="t-item skeleton"></div>`.repeat(6);
+  updateOffer();
+  try {
+    const [can, mine, theirs] = await Promise.all([
+      host.get(`https://trades.roblox.com/v2/users/${u.id}/can-trade-with`).catch(() => null),
+      tradableItems(S.user.id),
+      tradableItems(u.id),
+    ]);
+    if (token !== c.token) return;
+    c.mine = mine; c.theirs = theirs;
+    await itemThumbs([...mine, ...theirs].map((i) => i.itemTarget));
+    if (token !== c.token) return;
+    $("#tcSub").textContent = `@${u.name} · pick up to ${MAX_TRADE_ITEMS} items on each side`;
+    if (can && can.canTrade === false) {
+      $("#tcSub").textContent = CANT_TRADE[can.mutualTradeEligibility] || "Roblox says you can't trade with this player right now.";
+      $("#tcSub").classList.add("warn");
+    } else $("#tcSub").classList.remove("warn");
+    if (c.counter) { // start from the offer being countered
+      for (const i of c.counter.mine.items || []) c.give.set(i.collectibleItemInstanceId, i);
+      for (const i of c.counter.theirs.items || []) c.get.set(i.collectibleItemInstanceId, i);
+      $("#tcGiveRobux").value = c.counter.mine.robux || "";
+      $("#tcGetRobux").value = c.counter.theirs.robux || "";
+    }
+    renderInv();
+  } catch (e) {
+    if (token === c.token) { $("#tcMine").innerHTML = $("#tcTheirs").innerHTML = ""; $("#tcSub").textContent = `Couldn't load items: ${e.message}`; }
+  }
+}
+
+/** Tradable limiteds, one entry per copy (each copy has its own serial and instance id). */
+async function tradableItems(uid) {
+  const out = [];
+  let cursor = "";
+  for (let i = 0; i < 20; i++) {
+    const p = new URLSearchParams({ sortBy: "CreationTime", limit: "50" });
+    if (cursor) p.set("cursor", cursor);
+    const r = await host.get(`https://trades.roblox.com/v2/users/${uid}/tradableItems?${p}`);
+    for (const it of (r && r.items) || [])
+      for (const ins of it.instances || [])
+        out.push({ ...ins, itemTarget: ins.itemTarget || it.itemTarget, itemName: ins.itemName || it.itemName, recentAveragePrice: ins.recentAveragePrice ?? it.recentAveragePrice });
+    cursor = r && r.nextPageCursor;
+    if (!cursor) break;
+  }
+  return out.sort((a, b) => (b.recentAveragePrice || 0) - (a.recentAveragePrice || 0));
+}
+
+function renderInv() {
+  const c = trade.c;
+  const draw = (el, list, sel, side, filter) => {
+    const f = filter.trim().toLowerCase();
+    const shown = list.filter((i) => !f || (i.itemName || "").toLowerCase().includes(f));
+    el.innerHTML = shown.map((i) => tradeItemHTML(i, `data-side="${side}" data-inst="${esc(i.collectibleItemInstanceId)}"`,
+      (sel.has(i.collectibleItemInstanceId) ? "sel " : "") + (i.isOnHold ? "held" : ""))).join("")
+      || `<div class="muted small t-empty">${list.length ? "Nothing matches." : side === "give" ? "You don't have any tradable limiteds." : "They don't have any tradable limiteds (or their inventory is private)."}</div>`;
+  };
+  draw($("#tcMine"), c.mine, c.give, "give", $("#tcMineFilter").value);
+  draw($("#tcTheirs"), c.theirs, c.get, "get", $("#tcTheirsFilter").value);
+  updateOffer();
+}
+$("#tcMineFilter").oninput = $("#tcTheirsFilter").oninput = () => renderInv();
+
+$("#tcGrid").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-inst]");
+  if (!el) return;
+  const c = trade.c;
+  const side = el.dataset.side, id = el.dataset.inst;
+  const map = side === "give" ? c.give : c.get;
+  const item = (side === "give" ? c.mine : c.theirs).find((i) => i.collectibleItemInstanceId === id);
+  if (!item) return;
+  if (map.has(id)) map.delete(id);
+  else if (item.isOnHold) return toast("That item is on hold and can't be traded yet.", true);
+  else if (map.size >= MAX_TRADE_ITEMS) return toast(`Roblox allows up to ${MAX_TRADE_ITEMS} items on each side.`, true);
+  else map.set(id, item);
+  renderInv();
+});
+$("#tcOffer").addEventListener("click", (e) => { // click an item in the offer to take it out
+  const el = e.target.closest("[data-inst]");
+  if (!el) return;
+  (el.dataset.side === "give" ? trade.c.give : trade.c.get).delete(el.dataset.inst);
+  renderInv();
+});
+$("#tcGiveRobux").oninput = $("#tcGetRobux").oninput = () => updateOffer();
+
+const robuxIn = (el) => Math.max(0, Math.floor(Number(el.value) || 0));
+
+function updateOffer() {
+  const c = trade.c;
+  if (!c) return;
+  const give = [...c.give.values()], get = [...c.get.values()];
+  const gr = robuxIn($("#tcGiveRobux")), tr = robuxIn($("#tcGetRobux"));
+  const slot = (list, side) => list.map((i) => tradeItemHTML(i, `data-side="${side}" data-inst="${esc(i.collectibleItemInstanceId)}"`, "in-offer")).join("")
+    + `<div class="t-slot"></div>`.repeat(Math.max(0, MAX_TRADE_ITEMS - list.length));
+  $("#tcGive").innerHTML = slot(give, "give");
+  $("#tcGet").innerHTML = slot(get, "get");
+  $("#tcGiveTotal").innerHTML = totalHTML(give, gr);
+  $("#tcGetTotal").innerHTML = totalHTML(get, tr);
+  const diff = rapOf(get) - rapOf(give);
+  let note = give.length && get.length ? `${diff >= 0 ? "+" : "−"}${Math.abs(diff).toLocaleString()} RAP for you` : "Pick at least one item on each side.";
+  if (gr || tr) note += " · Roblox keeps 30% of any Robux in a trade";
+  $("#tcNote").textContent = note;
+  $("#tcSend").disabled = !c.partner || !give.length || !get.length;
+}
+
+$("#tcSend").onclick = async () => {
+  const c = trade.c;
+  if (!c || !c.partner) return;
+  const give = [...c.give.keys()], get = [...c.get.keys()];
+  const gr = robuxIn($("#tcGiveRobux")), tr = robuxIn($("#tcGetRobux"));
+  const ok = await avDialog({
+    title: `${c.counter ? "Send counter offer" : "Send trade"} to ${c.partner.displayName}?`,
+    text: `You give ${rapOf([...c.give.values()]).toLocaleString()} RAP${gr ? ` + ${gr.toLocaleString()} Robux` : ""} and ask for ${rapOf([...c.get.values()]).toLocaleString()} RAP${tr ? ` + ${tr.toLocaleString()} Robux` : ""}. They can accept it straight away.`,
+    input: false, ok: "Send",
+  });
+  if (!ok) return;
+  const body = {
+    senderOffer: { userId: S.user.id, robux: gr, collectibleItemInstanceIds: give },
+    recipientOffer: { userId: c.partner.id, robux: tr, collectibleItemInstanceIds: get },
+  };
+  $("#tcSend").disabled = true;
+  try {
+    await host.post(c.counter ? `https://trades.roblox.com/v2/trades/${c.counter.id}/counter` : "https://trades.roblox.com/v2/trades/send", body);
+    toast(c.counter ? "Counter offer sent!" : "Trade sent!");
+    $("#tradeCompose").hidden = true;
+    if (currentPage !== "trade") go("trade");
+    trade.tab = "Outbound";
+    $$("#tradeTabs [data-tt]").forEach((x) => x.classList.toggle("on", x.dataset.tt === "Outbound"));
+    loadTrades(true);
+    refreshTradeCount();
+  } catch (e) { $("#tcSend").disabled = false; tradeError(e); }
+};
+$("#tcClose").onclick = $("#tcCancel").onclick = () => ($("#tradeCompose").hidden = true);
+
 /* =========================================================
    Starfield
    ========================================================= */
@@ -2091,7 +2581,10 @@ async function openProfile(id) {
 /* =========================================================
    Updates (GitHub Releases)
    ========================================================= */
-const upd = { info: null, release: null, busy: false, countdown: null, pending: false, declined: false };
+// When a new release is out, RoLauncher asks: "Update now" or "Later".
+// It never interrupts a game: the question waits until you've finished playing.
+// "Later" means "ask me again next time RoLauncher starts".
+const upd = { info: null, release: null, busy: false, pending: false, declined: false };
 const UPD_RECHECK = 6 * 3600 * 1000; // look again every 6 hours while the launcher stays open
 const gameRunning = () => sessions.size > 0 || !!launching;
 
@@ -2112,56 +2605,40 @@ async function checkForUpdate(manual) {
     if (!r.latest) { if (manual) st.textContent = "No releases published yet."; return; }
     if (!r.available) { if (manual) st.textContent = `You're up to date (${r.current}).`; return; }
     st.textContent = `Version ${r.latest} is available.`;
-    if (!manual && S.settings.autoInstall !== false) return autoInstall(r);
-    if (!manual && S.settings.skipUpdate === r.latest) return;
-    showUpdate(r);
+    if (manual) { upd.declined = false; return showUpdate(r); }
+    askToUpdate(r);
   } catch (e) {
     if (manual) st.textContent = `Couldn't check: ${e.message}`;
   }
+}
+
+function askToUpdate(r) {
+  if (upd.busy || upd.declined || !$("#updModal").hidden) return;
+  if (gameRunning()) {
+    upd.pending = true;
+    $("#updStatus").textContent = `Version ${r.latest} is available — you'll be asked when you finish playing.`;
+    return;
+  }
+  upd.pending = false;
+  showUpdate(r);
 }
 
 function showUpdate(r) {
   $("#updTitle").textContent = `RoLauncher ${r.latest} is here`;
   const mb = r.size ? ` · ${(r.size / 1048576).toFixed(0)} MB download` : "";
   const when = r.published ? ` · released ${new Date(r.published).toLocaleDateString()}` : "";
-  $("#updSub").textContent = `You have ${r.current}${when}${mb}`;
+  $("#updSub").textContent = `You have ${r.current}${when}${mb}. Update now?`;
   $("#updNotes").textContent = (r.notes || "").replace(/\r/g, "").trim();
   $("#updProgress").hidden = true;
   $("#updNow").disabled = $("#updLater").disabled = false;
   $("#updNow").textContent = "Update now";
+  $("#updLater").textContent = "Later";
   $("#updModal").hidden = false;
 }
 
-// Installs without asking: waits until no game is running, then counts down 10 seconds (cancellable).
-// "Not now" skips it for this session only; it installs on the next start.
-function autoInstall(r) {
-  if (upd.busy || upd.countdown || upd.declined) return;
-  if (gameRunning()) {
-    upd.pending = true;
-    $("#updStatus").textContent = `Version ${r.latest} will install when you finish playing.`;
-    return;
-  }
-  upd.pending = false;
-  showUpdate(r);
-  $("#updLater").textContent = "Not now";
-  let left = 10;
-  const tick = () => {
-    if (gameRunning()) { stopCountdown(); $("#updModal").hidden = true; upd.pending = true; return; }
-    if (left <= 0) { stopCountdown(); $("#updNow").click(); return; }
-    $("#updNow").textContent = `Updating in ${left--} s`;
-  };
-  tick();
-  upd.countdown = setInterval(tick, 1000);
-}
-function stopCountdown() {
-  if (!upd.countdown) return;
-  clearInterval(upd.countdown);
-  upd.countdown = null;
-  $("#updLater").textContent = "Later";
-}
-// The last game closed: an update that was waiting can go ahead now.
+// The last game closed: an update that was waiting can be offered now.
 function resumePendingUpdate() {
-  if (upd.pending && upd.release && upd.release.available && S.settings.autoInstall !== false) setTimeout(() => { if (!gameRunning()) autoInstall(upd.release); }, 3000);
+  if (upd.pending && upd.release && upd.release.available) setTimeout(() => { if (!gameRunning()) askToUpdate(upd.release); }, 3000);
 }
 
 function onUpdateProgress(p) {
@@ -2173,7 +2650,6 @@ function onUpdateProgress(p) {
 $("#updNow").onclick = async () => {
   const r = upd.release;
   if (!r || !r.download || upd.busy) return;
-  stopCountdown();
   upd.busy = true;
   $("#updNow").disabled = $("#updLater").disabled = true;
   onUpdateProgress(0);
@@ -2186,15 +2662,14 @@ $("#updNow").onclick = async () => {
   }
 };
 $("#updLater").onclick = () => {
-  if (upd.countdown) { stopCountdown(); upd.declined = true; $("#updModal").hidden = true; return; }
-  if (upd.release) { S.settings.skipUpdate = upd.release.latest; store.save(); }
+  upd.declined = true; // don't ask again until RoLauncher starts next time
   $("#updModal").hidden = true;
+  if (upd.release) $("#updStatus").textContent = `Version ${upd.release.latest} is available — press “Check for updates” to install it.`;
 };
 $("#updPage").onclick = (e) => { e.preventDefault(); if (upd.release && upd.release.page) host.open(upd.release.page); };
 $("#updRepo").onclick = (e) => { e.preventDefault(); host.open(upd.info ? upd.info.repo : "https://github.com/rawified/RoLauncher"); };
 $("#updCheck").onclick = () => checkForUpdate(true);
-$("#setAutoUpdate").onchange = (e) => { S.settings.autoUpdate = e.target.checked; $("#setAutoInstall").disabled = !e.target.checked; store.save(); };
-$("#setAutoInstall").onchange = (e) => { S.settings.autoInstall = e.target.checked; store.save(); };
+$("#setAutoUpdate").onchange = (e) => { S.settings.autoUpdate = e.target.checked; store.save(); };
 setInterval(() => { if (S.settings.autoUpdate !== false) checkForUpdate(false); }, UPD_RECHECK);
 
 /* =========================================================
@@ -2205,9 +2680,12 @@ setInterval(() => { if (S.settings.autoUpdate !== false) checkForUpdate(false); 
   updateCounters();
   renderAccount();
   checkSession();
+  restoreSessions();
   applyDiscordConfig();
   if (host.available) host.closeBehavior(S.settings.closeBehavior || "ask").catch(() => {});
   loadAppInfo();
+  setTimeout(refreshTradeCount, 6000);
+  setInterval(refreshTradeCount, 5 * 60 * 1000); // red dot on Trading when offers are waiting
   if (S.settings.autoUpdate !== false) setTimeout(() => checkForUpdate(false), 4000);
   if (S.settings.multi && host.available) host.multiInstance(true).then((r) => {
     if (!r || !r.enabled) { S.settings.multi = false; store.save(); toast("Multiple Roblox windows was turned off: close Roblox first, then turn it back on in Settings.", true); }

@@ -11,7 +11,7 @@
     <RootNamespace>RoLauncherSetup</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>..\icon.ico</ApplicationIcon>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Product>RoLauncher Setup</Product>
     <Company>RoLauncher</Company>
   </PropertyGroup>

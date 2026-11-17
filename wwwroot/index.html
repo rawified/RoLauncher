@@ -29,7 +29,9 @@
     </div>
     <div class="tb-game nodrag" id="tbGame" hidden>
       <span class="live-dot"></span><img id="tbGameIcon" alt="" /><span id="tbGameName">Launching…</span><span class="muted" id="tbGameTime"></span><span class="more-games" id="tbGameMore" hidden></span>
-      <button class="btn leave" id="tbLeave"><svg viewBox="0 0 24 24"><use href="#i-logout"/></svg>Leave game</button>
+      <button class="btn tb-min" id="tbMin" title="Minimize the game and use the launcher — the game keeps running" hidden><svg viewBox="0 0 24 24"><use href="#i-min"/></svg>Minimize</button>
+      <button class="btn tb-continue" id="tbContinue" title="Continue playing" hidden><svg viewBox="0 0 24 24"><use href="#i-play"/></svg>Continue playing</button>
+      <button class="btn leave" id="tbLeave" title="Leave game"><svg viewBox="0 0 24 24"><use href="#i-logout"/></svg>Leave game</button>
     </div>
     <div class="tb-right">
       <button class="pill-btn nodrag" id="tbSearch" title="Search games"><svg viewBox="0 0 24 24"><use href="#i-search"/></svg></button>
@@ -61,6 +63,7 @@
         <button class="rail-btn" data-page="avatar" title="Avatar"><svg viewBox="0 0 24 24"><use href="#i-shirt"/></svg></button>
         <button class="rail-btn" data-page="favorites" title="Favorites"><svg viewBox="0 0 24 24"><use href="#i-heart"/></svg></button>
         <button class="rail-btn" data-page="profile" title="Profiles"><svg viewBox="0 0 24 24"><use href="#i-id"/></svg></button>
+        <button class="rail-btn" data-page="trade" title="Trading"><svg viewBox="0 0 24 24"><use href="#i-swap"/></svg><span class="dot" id="tradeDot"></span></button>
         <button class="rail-btn" data-page="friends" title="Friends"><svg viewBox="0 0 24 24"><use href="#i-users"/></svg></button>
         <button class="rail-btn" data-page="history" title="History"><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg></button>
       </div>
@@ -209,6 +212,20 @@
         </form>
         <div id="profileView"></div>
       </section>
+      <!-- Trading -->
+      <section class="page" id="page-trade">
+        <div class="page-title row"><div><h1>Trading</h1><p>Trade limited items with other players. Values are Roblox's recent average price (RAP).</p></div>
+          <div class="trade-head-actions"><div class="rap-big" id="tradeMyRap" hidden></div><button class="btn primary" id="tradeNew"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg>New trade</button></div></div>
+        <div class="empty" id="tradeSignin" hidden>Sign in with your Roblox account (Settings) to see and send trades.</div>
+        <div id="tradeBody">
+          <div class="seg trade-tabs" id="tradeTabs">
+            <button data-tt="Inbound" class="on">Inbound<span class="t-count" id="ttInbound" hidden></span></button><button data-tt="Outbound">Outbound</button><button data-tt="Completed">Completed</button><button data-tt="Inactive">Inactive</button>
+          </div>
+          <div class="trade-list" id="tradeList"></div>
+          <div class="load-more"><button class="btn ghost" id="tradeMore" hidden>Load more</button></div>
+        </div>
+      </section>
+
 
       <!-- Favorites -->
       <section class="page" id="page-favorites">
@@ -298,8 +315,7 @@
           <div class="set-card">
             <h3>Updates</h3>
             <p class="muted" id="updVersion">RoLauncher</p>
-            <label class="toggle"><input type="checkbox" id="setAutoUpdate" /><span></span>Check for updates automatically</label>
-            <label class="toggle"><input type="checkbox" id="setAutoInstall" /><span></span>Install updates automatically (waits until you're not playing)</label>
+            <label class="toggle"><input type="checkbox" id="setAutoUpdate" /><span></span>Check for updates and ask me when a new version is out</label>
             <div class="upd-row"><button class="btn ghost" id="updCheck">Check for updates</button><span class="muted small" id="updStatus"></span></div>
             <p class="muted small">Updates come from <a href="#" id="updRepo">RoLauncher on GitHub</a>. Your sign-ins and settings are kept.</p>
           </div>
@@ -382,6 +398,37 @@
       <div class="upd-actions"><a href="#" class="muted small" id="updPage">See it on GitHub</a><span></span><button class="btn ghost" id="updLater">Later</button><button class="btn primary" id="updNow">Update now</button></div>
     </div>
   </div>
+  <div class="modal glass" id="tradeModal" hidden>
+    <div class="modal-card trade-card">
+      <button class="modal-close" id="tradeClose"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      <div class="trade-top"><img id="tvHead" alt="" /><div><h2 id="tvTitle">Trade</h2><div class="muted small" id="tvSub"></div></div></div>
+      <div class="trade-sides">
+        <div class="trade-side"><h3>You give</h3><div class="trade-items" id="tvGive"></div><div class="trade-total" id="tvGiveTotal"></div></div>
+        <div class="trade-side get"><h3>You get</h3><div class="trade-items" id="tvGet"></div><div class="trade-total" id="tvGetTotal"></div></div>
+      </div>
+      <div class="trade-actions" id="tvActions"></div>
+    </div>
+  </div>
+  <div class="modal glass" id="tradeCompose" hidden>
+    <div class="modal-card trade-card wide">
+      <button class="modal-close" id="tcClose"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg></button>
+      <div class="trade-top"><img id="tcHead" alt="" /><div><h2 id="tcTitle">New trade</h2><div class="muted small" id="tcSub">Pick who you want to trade with.</div></div></div>
+      <form class="search-box" id="tcUserForm">
+        <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
+        <input id="tcUser" placeholder="Username to trade with…" autocomplete="off" />
+        <button class="btn primary" type="submit">Choose</button>
+      </form>
+      <div class="tc-grid" id="tcGrid" hidden>
+        <div class="tc-col"><div class="tc-col-head"><h3>Your items</h3><input class="tc-filter" id="tcMineFilter" placeholder="Filter…" /></div><div class="tc-inv" id="tcMine"></div></div>
+        <div class="tc-col"><div class="tc-col-head"><h3 id="tcTheirsTitle">Their items</h3><input class="tc-filter" id="tcTheirsFilter" placeholder="Filter…" /></div><div class="tc-inv" id="tcTheirs"></div></div>
+      </div>
+      <div class="trade-sides" id="tcOffer" hidden>
+        <div class="trade-side"><h3>You give</h3><div class="trade-items" id="tcGive"></div><label class="tc-robux">+ <svg viewBox="0 0 24 24"><use href="#i-robux"/></svg><input type="number" min="0" step="1" id="tcGiveRobux" placeholder="0" /> Robux</label><div class="trade-total" id="tcGiveTotal"></div></div>
+        <div class="trade-side get"><h3>You get</h3><div class="trade-items" id="tcGet"></div><label class="tc-robux">+ <svg viewBox="0 0 24 24"><use href="#i-robux"/></svg><input type="number" min="0" step="1" id="tcGetRobux" placeholder="0" /> Robux</label><div class="trade-total" id="tcGetTotal"></div></div>
+      </div>
+      <div class="trade-actions"><span class="muted small" id="tcNote"></span><button class="btn ghost" id="tcCancel">Cancel</button><button class="btn primary" id="tcSend" disabled>Send trade</button></div>
+    </div>
+  </div>
   <div class="modal glass" id="avDialog" hidden>
     <div class="modal-card av-dialog">
       <h2 id="avDlgTitle"></h2>
@@ -459,6 +506,7 @@
       <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17a3.5 3.5 0 0 1 7 0M15 9.5h3.5M15 13h3.5"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></symbol>
+      <symbol id="i-min" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 20h14"/></symbol>
       <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     </defs>
   </svg>

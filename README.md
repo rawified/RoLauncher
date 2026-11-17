@@ -39,6 +39,7 @@ Two interfaces, multiple accounts, an avatar editor, server browser, Discord pre
 - **Auto-return**: leave a game and RoLauncher closes Roblox and comes back
 - **Multiple Roblox windows** at the same time
 - **Per-game playtime** with a 7-day history
+- **Minimize a game** to use the launcher while you play, then hit **Continue playing**
 - Asks what to do with running games when you close the launcher
 
 </td>
@@ -47,7 +48,8 @@ Two interfaces, multiple accounts, an avatar editor, server browser, Discord pre
 ### 👥 Accounts & people
 - **Alt account switcher** — sign-ins are encrypted with Windows (DPAPI) and never leave your PC
 - **"Play as"** any saved account
-- **Profile viewer**: avatar, friends, groups, badges, favorites
+- **Profile viewer**: avatar, **RAP**, what they're **currently wearing**, limiteds, friends, groups, badges, favorites
+- **Trading**: see inbound, outbound and past trades, accept, decline or counter, and send new trades with RAP totals
 - **Friends** list with who's online and in-game
 
 </td>
@@ -84,7 +86,7 @@ Two interfaces, multiple accounts, an avatar editor, server browser, Discord pre
 
 ### 🔧 Extras
 - **Discord Rich Presence** — shows what you're playing, with *View game* and *Join server* buttons
-- **Automatic updates** from GitHub Releases, in one click
+- **Update notifications**: asks when a new version is out, and updates in one click
 - Per-user **installer & uninstaller** — no admin rights needed
 - Accent colors, animated starfield and more
 
@@ -105,7 +107,7 @@ Two interfaces, multiple accounts, an avatar editor, server browser, Discord pre
 
 **Requirements:** Windows 10 or 11 (64-bit), the Roblox Player, and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (already on most PCs — the installer tells you if it's missing).
 
-**Updating:** RoLauncher checks GitHub for new versions on start-up (you can turn that off in Settings → Updates). Press **Update now** and it downloads the new installer from this repository's releases, updates itself and reopens — your sign-ins and settings stay.
+**Updating:** RoLauncher checks GitHub for new versions and asks you when one is out (never in the middle of a game; you can turn this off in Settings → Updates). Press **Update now** and it downloads the new installer from this repository's releases, updates itself and reopens — your sign-ins and settings stay.
 
 **Uninstalling:** Windows Settings → Apps → Installed apps → RoLauncher → Uninstall. You'll be asked whether to keep your data.
 
@@ -119,7 +121,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) on Windows.
 git clone https://github.com/rawified/RoLauncher.git
 cd RoLauncher
 dotnet run                                   # run the launcher
-.\build-installer.ps1 -Version 1.2.0         # build dist\RoLauncherSetup-1.2.0.exe
+.\build-installer.ps1 -Version 1.3.0         # build dist\RoLauncherSetup-1.3.0.exe
 ```
 
 ### Publishing an update

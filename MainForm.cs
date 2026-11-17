@@ -115,6 +115,8 @@ public sealed class MainForm : Form
                 "logout" => await RemoveAccountAsync(_accounts?.Active?.Id ?? 0, signOut: true),
                 "launch" => await LaunchAsync(msg),
                 "leaveGame" => LeaveGame(msg["sid"]?.GetValue<int>()),
+                "sessions" => SessionsPayload(),
+                "gameView" => GameView(msg["sid"]?.GetValue<int>() ?? 0, msg["action"]?.GetValue<string>()),
                 "multiInstance" => SetMultiInstance(msg["enabled"]?.GetValue<bool>() ?? false),
                 "discordConfig" => DiscordConfig(msg),
                 "closeBehavior" => _closeBehavior = msg["mode"]?.GetValue<string>() is "close" or "keep" ? msg["mode"]!.GetValue<string>() : "ask",
@@ -373,7 +375,9 @@ public sealed class MainForm : Form
                   + (accessCode is not null ? $"&accessCode={accessCode}" : linkCode is not null ? $"&linkCode={linkCode}" : job is null ? "" : $"&gameInstanceId={job}");
         }
 
-        var sid = StartSession(opts, acc?.Id ?? 0);
+        // Page-supplied details (game name, icon…) kept so a reloaded page can show the running game again.
+        var meta = msg["meta"] is JsonObject m && m.ToJsonString().Length <= 8000 ? m.DeepClone() : null;
+        var sid = StartSession(opts, acc?.Id ?? 0, meta);
         try
         {
             Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
@@ -381,6 +385,7 @@ public sealed class MainForm : Form
         catch (System.ComponentModel.Win32Exception)
         {
             if (_sessions.Remove(sid, out var dead)) dead.Dispose();
+            _info.Remove(sid);
             throw new InvalidOperationException("Roblox doesn't seem to be installed (roblox-player protocol not registered).");
         }
         return new { sid, accountId = acc?.Id ?? 0, multi = _singleton is not null };
@@ -392,11 +397,21 @@ public sealed class MainForm : Form
         : code.Length <= 128 && code.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? code
         : throw new ArgumentException("Invalid private server code");
 
-    private int StartSession(LaunchOptions opts, long accountId)
+    /// <summary>What the page needs to rebuild a running game after it reloads (e.g. switching interface).</summary>
+    private sealed class SessionInfo
+    {
+        public long AccountId; public JsonNode? Meta;
+        public long Started, PlayStart; public bool Windowed;
+        public string? JobId, PlaceId;
+    }
+    private readonly Dictionary<int, SessionInfo> _info = new();
+
+    private int StartSession(LaunchOptions opts, long accountId, JsonNode? meta = null)
     {
         var sid = ++_nextSid;
         var session = new GameSession(opts);
         _sessions[sid] = session;
+        _info[sid] = new SessionInfo { AccountId = accountId, Meta = meta };
         session.Changed += (state, data) => BeginInvoke(() => OnSessionChanged(sid, accountId, session, state, data));
         session.Start();
         return sid;
@@ -404,6 +419,15 @@ public sealed class MainForm : Form
 
     private void OnSessionChanged(int sid, long accountId, GameSession session, string state, Dictionary<string, object?> data)
     {
+        if (_info.TryGetValue(sid, out var info))
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (state == "process") info.Started = now;
+            if (state is "window" or "joined") { if (info.Started == 0) info.Started = now; if (info.PlayStart == 0) info.PlayStart = now; }
+            if (state == "window") info.Windowed = true;
+            if (data.TryGetValue("jobId", out var j) && j is string js) info.JobId = js;
+            if (data.TryGetValue("placeId", out var p) && p is not null) info.PlaceId = p.ToString();
+        }
         switch (state)
         {
             case "window":
@@ -414,6 +438,7 @@ public sealed class MainForm : Form
             case "failed":
                 if (_embeddedSid == sid) { ReleaseEmbedded(); _embeddedSid = 0; }
                 _sessions.Remove(sid);
+                _info.Remove(sid);
                 session.Dispose();
                 if (_sessions.Count == 0) BringLauncherBack();
                 break;
@@ -515,6 +540,7 @@ public sealed class MainForm : Form
         SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style));
         SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, Handle); // owner, not parent
         _embedded = hwnd;
+        _gameHidden = false;
         FitEmbedded();
         SetForegroundWindow(hwnd);
     }
@@ -536,8 +562,68 @@ public sealed class MainForm : Form
             var r = Bounds;
             SetWindowPos(_embedded, IntPtr.Zero, r.X + 40, r.Y + 40, Math.Max(800, r.Width - 80), Math.Max(600, r.Height - 80),
                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            if (_gameHidden) ShowWindow(_embedded, SW_SHOW); // a game left running must never stay invisible
         }
         _embedded = IntPtr.Zero;
+        _gameHidden = false;
+    }
+
+
+    private object SessionsPayload() =>
+        _sessions.Where(kv => _info.ContainsKey(kv.Key)).Select(kv =>
+        {
+            var i = _info[kv.Key];
+            var embedded = _embeddedSid == kv.Key && _embedded != IntPtr.Zero;
+            return new
+            {
+                sid = kv.Key, accountId = i.AccountId, meta = i.Meta, started = i.Started, playStart = i.PlayStart,
+                windowed = i.Windowed, jobId = i.JobId, placeId = i.PlaceId, embedded, hidden = embedded && _gameHidden
+            };
+        }).ToList();
+
+    // ---------- Minimizing the game inside the launcher ----------
+    // "hide" tucks the game away so the launcher can be used (the game keeps running);
+    // "show" puts it back. A game in its own window is brought to the front instead.
+    private bool _gameHidden;
+
+    private object GameView(int sid, string? action)
+    {
+        var show = action != "hide";
+        var win = _sessions.TryGetValue(sid, out var s) ? s.GameWindow : IntPtr.Zero;
+        if (win == IntPtr.Zero && _embedded != IntPtr.Zero) win = _embedded;
+        if (win == IntPtr.Zero || !IsWindow(win)) throw new InvalidOperationException("The game window isn't open yet.");
+
+        if (win == _embedded)
+        {
+            if (show)
+            {
+                if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                ShowWindow(win, SW_SHOWNOACTIVATE);
+                _gameHidden = false;
+                FitEmbedded();
+                SetForegroundWindow(win);
+            }
+            else
+            {
+                ShowWindow(win, SW_HIDE);
+                _gameHidden = true;
+                Activate();
+                _web.Focus();
+            }
+            return new { embedded = true, hidden = _gameHidden };
+        }
+
+        if (show)
+        {
+            ShowWindow(win, SW_RESTORE);
+            SetForegroundWindow(win);
+        }
+        else
+        {
+            ShowWindow(win, SW_MINIMIZE);
+            BringLauncherBack();
+        }
+        return new { embedded = false, hidden = !show };
     }
 
     // ---------- Misc ----------
@@ -619,7 +705,7 @@ public sealed class MainForm : Form
         else if (b) m.Result = 15;
     }
 
-    private const int GWL_STYLE = -16, GWLP_HWNDPARENT = -8, SW_RESTORE = 9;
+    private const int GWL_STYLE = -16, GWLP_HWNDPARENT = -8, SW_RESTORE = 9, SW_HIDE = 0, SW_SHOWNOACTIVATE = 4, SW_MINIMIZE = 6, SW_SHOW = 5;
     private const uint SWP_NOZORDER = 0x0004, SWP_NOACTIVATE = 0x0010, SWP_FRAMECHANGED = 0x0020;
     private const long WS_POPUP = 0x80000000, WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000, WS_CAPTION = 0x00C00000,
         WS_THICKFRAME = 0x00040000, WS_SYSMENU = 0x00080000, WS_MINIMIZEBOX = 0x00020000, WS_MAXIMIZEBOX = 0x00010000;

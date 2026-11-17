@@ -121,14 +121,6 @@ body.console.subpage .ps-bg > div { filter: blur(40px) brightness(.45) saturate(
 .ps-wide .cap small { display: block; color: rgba(255,255,255,.7); font-weight: 500; font-size: 11.5px; }
 
 /* ---------- Dock for running games ---------- */
-.ps-dock { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 45; display: flex; gap: 10px; padding: 10px; border-radius: 22px; background: rgba(18,20,30,.78); backdrop-filter: var(--glass); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 20px 60px rgba(0,0,0,.55); animation: pop .25s ease; }
-.ps-dock[hidden] { display: none; }
-.ps-dock .d-game { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 6px; border-radius: 14px; background: rgba(255,255,255,.06); }
-.ps-dock img { width: 46px; height: 46px; border-radius: 10px; background: rgba(255,255,255,.1); }
-.ps-dock .d-name { font-weight: 700; font-size: 13px; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ps-dock .d-sub { font-size: 11.5px; color: var(--muted); }
-.ps-dock .d-leave { height: 34px; padding: 0 14px; border-radius: 17px; background: rgba(239,68,68,.2); color: #fecaca; font-weight: 700; font-size: 12px; }
-.ps-dock .d-leave:hover { background: #ef4444; color: #fff; }
 
 .ps-hints { position: fixed; right: 26px; bottom: 18px; z-index: 2; display: flex; gap: 16px; font-size: 12px; color: rgba(255,255,255,.55); pointer-events: none; transition: opacity .3s; }
 .ps-hints kbd { display: inline-block; min-width: 22px; padding: 2px 6px; margin-right: 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); font: 600 11px/1.4 inherit; text-align: center; }
@@ -327,3 +319,35 @@ body.console.subpage .ps-hints { opacity: 0; }
 .console .dd-item.hl { background: rgba(255,255,255,.14); color: #fff; }
 .console .dd-item.sel { color: #fff; }
 .console .dd-check { stroke: #fff; }
+
+/* Trading + minimized game (Console skin) */
+.console .tb-game .btn.leave, .console .btn.tb-min, .console .btn.tb-continue { height: 30px; border-radius: 15px; padding: 0 14px; }
+.console .trade-row, .console .trade-side, .console .t-item { background: rgba(22,25,36,.55); backdrop-filter: var(--glass); border: 1px solid rgba(255,255,255,.07); }
+.console .trade-row { border-radius: 18px; padding: 14px 18px; }
+.console .trade-row:hover { border-color: rgba(255,255,255,.5); }
+.console .trade-side { border-radius: 18px; }
+.console .trade-card { border-radius: 22px; }
+.console .trade-tabs { max-width: 620px; }
+/* The game bar sits in line after the menu instead of centered on top of it */
+.console .tb-game { position: static; transform: none; margin: 0 12px 0 auto; flex-shrink: 1; min-width: 0; }
+.console .tb-game #tbGameName { max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.console .tb-game > .btn { flex-shrink: 0; }
+/* While playing there isn't room for the menu, the full game bar and the right side,
+   so the bar goes compact: icon + timer + buttons, name in the tooltip, Leave as an icon */
+.console.in-game .ps-tabs { gap: 2px; margin-left: 18px; }
+.console.in-game .ps-tabs button { padding: 8px 10px; font-size: 15px; }
+.console.in-game .ps-tabs button.on::after { left: 10px; right: 10px; }
+.console.in-game #tbGameName, .console.in-game .ps-clock { display: none; }
+.console .tb-game .btn.leave { width: 30px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+.console .tb-game .btn.leave svg { width: 15px; height: 15px; }
+.console .tb-game { padding: 0 4px 0 6px; gap: 6px; }
+.console .tb-game img { width: 26px; height: 26px; border-radius: 8px; }
+@media (max-width: 1250px) {
+  .console.in-game .ps-tabs { margin-left: 10px; }
+  .console.in-game .ps-tabs button { padding: 8px 8px; font-size: 14px; }
+  .console.in-game .ps-tabs button.on::after { left: 8px; right: 8px; }
+  .console .tb-game .btn.tb-min, .console .tb-game .btn.tb-continue { width: 30px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .console .tb-game .btn.tb-min svg, .console .tb-game .btn.tb-continue svg { width: 15px; height: 15px; }
+  .console.in-game #tbGameTime { display: none; }
+  .console.in-game .brand-name, .console.in-game #userName, .console.in-game #userChip .chev { display: none; }
+}

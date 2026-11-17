@@ -11,6 +11,9 @@ internal static class Program
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        // Started by RoLauncher, this process inherits RoLauncher's working folder, which is the very
+        // folder being replaced. A process sitting in a folder keeps it locked, so move out first.
+        try { Environment.CurrentDirectory = Path.GetTempPath(); } catch { /* keep the inherited one */ }
         // "--update --wait <pid>": started by RoLauncher's updater. Updates the installed copy without questions.
         var update = args.Contains("--update");
         var i = Array.IndexOf(args, "--wait");
@@ -226,8 +229,8 @@ internal sealed class SetupForm : Form
         using var zip = new ZipArchive(payload, ZipArchiveMode.Read);
 
         // Clean out the previous version first (only reached for empty folders or earlier installs).
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
         Directory.CreateDirectory(dir);
+        ClearFolder(dir);
         var root = Path.GetFullPath(dir) + Path.DirectorySeparatorChar;
 
         var files = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).ToList();
@@ -239,6 +242,28 @@ internal sealed class SetupForm : Form
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             entry.ExtractToFile(target, overwrite: true);
             progress.Report((++done, files.Count));
+        }
+    }
+
+    /// <summary>
+    /// Empties the install folder but keeps the folder itself: another program using it as its working
+    /// folder blocks deleting the folder, not emptying it. Files still closing (the old version shutting
+    /// down) get retried for up to ~10 seconds.
+    /// </summary>
+    private static void ClearFolder(string dir)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(dir)) { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); }
+                foreach (var d in Directory.EnumerateDirectories(dir)) Directory.Delete(d, recursive: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && attempt < 20)
+            {
+                Thread.Sleep(500);
+            }
         }
     }
 

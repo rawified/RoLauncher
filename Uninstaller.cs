@@ -68,6 +68,8 @@ internal static class Uninstaller
         {
             CreateNoWindow = true,
             UseShellExecute = false,
+            WorkingDirectory = Path.GetTempPath(), // cmd sitting in the folder would stop it being removed
+
             WindowStyle = ProcessWindowStyle.Hidden
         });
 

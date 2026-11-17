@@ -98,7 +98,12 @@ internal static class Updater
         }
         progress(1);
 
-        Process.Start(new ProcessStartInfo(file, $"--update --wait {Environment.ProcessId}") { UseShellExecute = true });
+        // Run it from its own folder: it must not sit in the install folder it's about to replace.
+        Process.Start(new ProcessStartInfo(file, $"--update --wait {Environment.ProcessId}")
+        {
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(file)!
+        });
     }
 
     private static Version Normalize(Version v) => new(v.Major, Math.Max(0, v.Minor), Math.Max(0, v.Build));

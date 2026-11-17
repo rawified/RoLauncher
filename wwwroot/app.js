@@ -80,7 +80,7 @@ const store = {
   data: null,
   load() {
     try { this.data = JSON.parse(localStorage.getItem(this.key)) || {}; } catch { this.data = {}; }
-    const settings = Object.assign({ stars: true, minimize: true, embed: true, closeOnLeave: true, closeBehavior: "ask", autoUpdate: true, accent: ACCENTS[0] }, this.data.settings);
+    const settings = Object.assign({ stars: true, minimize: true, embed: true, closeOnLeave: true, closeBehavior: "ask", autoUpdate: true, autoInstall: true, accent: ACCENTS[0] }, this.data.settings);
     settings.discord = Object.assign({ enabled: false, clientId: "", browsing: true, join: true }, settings.discord);
     this.data = Object.assign({ user: null, recent: [], favorites: [], friends: [], playtime: {}, seeded: false }, this.data, { settings });
     return this;
@@ -509,7 +509,7 @@ function onGameEvent(m) {
       break;
     case "ended":
       stopPlayClock(se); sessions.delete(m.sid); doneLaunching();
-      if (!sessions.size) toast(`Welcome back! Thanks for playing ${se.g.name}`);
+      if (!sessions.size) { toast(`Welcome back! Thanks for playing ${se.g.name}`); resumePendingUpdate(); }
       if (currentPage === "launchpad") renderContinue();
       refreshFriends();
       refreshRobux();
@@ -1004,6 +1004,8 @@ function renderSettings() {
   $("#setCloseBehavior").value = S.settings.closeBehavior || "ask";
   $("#setMulti").checked = !!S.settings.multi;
   $("#setAutoUpdate").checked = S.settings.autoUpdate !== false;
+  $("#setAutoInstall").checked = S.settings.autoInstall !== false;
+  $("#setAutoInstall").disabled = S.settings.autoUpdate === false;
   const dc = S.settings.discord;
   $("#setDiscord").checked = !!dc.enabled;
   $("#discordId").value = dc.clientId || "";
@@ -1092,7 +1094,7 @@ const MARKET_CATS = [
   ["Emotes", "ioNxAT977DFP2hMnAJbsbF"],
   ["Animations", "whf6kUVBwk2xdwKUmRYN6G"],
 ];
-const market = { cat: "", sort: "1", q: "", cursor: null, loaded: false, busy: false, items: new Map() };
+const market = { cat: "", sort: "0", q: "", cursor: null, loaded: false, busy: false, items: new Map() };
 
 $("#marketCats").innerHTML = MARKET_CATS.map(([n, id]) => `<button class="chip ${id === "" ? "on" : ""}" data-cat="${id}">${n}</button>`).join("");
 $("#marketCats").addEventListener("click", (e) => {
@@ -2089,7 +2091,9 @@ async function openProfile(id) {
 /* =========================================================
    Updates (GitHub Releases)
    ========================================================= */
-const upd = { info: null, release: null, busy: false };
+const upd = { info: null, release: null, busy: false, countdown: null, pending: false, declined: false };
+const UPD_RECHECK = 6 * 3600 * 1000; // look again every 6 hours while the launcher stays open
+const gameRunning = () => sessions.size > 0 || !!launching;
 
 async function loadAppInfo() {
   if (!host.available) { $("#updVersion").textContent = "Version info is only available in the app."; return; }
@@ -2108,6 +2112,7 @@ async function checkForUpdate(manual) {
     if (!r.latest) { if (manual) st.textContent = "No releases published yet."; return; }
     if (!r.available) { if (manual) st.textContent = `You're up to date (${r.current}).`; return; }
     st.textContent = `Version ${r.latest} is available.`;
+    if (!manual && S.settings.autoInstall !== false) return autoInstall(r);
     if (!manual && S.settings.skipUpdate === r.latest) return;
     showUpdate(r);
   } catch (e) {
@@ -2127,6 +2132,38 @@ function showUpdate(r) {
   $("#updModal").hidden = false;
 }
 
+// Installs without asking: waits until no game is running, then counts down 10 seconds (cancellable).
+// "Not now" skips it for this session only; it installs on the next start.
+function autoInstall(r) {
+  if (upd.busy || upd.countdown || upd.declined) return;
+  if (gameRunning()) {
+    upd.pending = true;
+    $("#updStatus").textContent = `Version ${r.latest} will install when you finish playing.`;
+    return;
+  }
+  upd.pending = false;
+  showUpdate(r);
+  $("#updLater").textContent = "Not now";
+  let left = 10;
+  const tick = () => {
+    if (gameRunning()) { stopCountdown(); $("#updModal").hidden = true; upd.pending = true; return; }
+    if (left <= 0) { stopCountdown(); $("#updNow").click(); return; }
+    $("#updNow").textContent = `Updating in ${left--} s`;
+  };
+  tick();
+  upd.countdown = setInterval(tick, 1000);
+}
+function stopCountdown() {
+  if (!upd.countdown) return;
+  clearInterval(upd.countdown);
+  upd.countdown = null;
+  $("#updLater").textContent = "Later";
+}
+// The last game closed: an update that was waiting can go ahead now.
+function resumePendingUpdate() {
+  if (upd.pending && upd.release && upd.release.available && S.settings.autoInstall !== false) setTimeout(() => { if (!gameRunning()) autoInstall(upd.release); }, 3000);
+}
+
 function onUpdateProgress(p) {
   $("#updProgress").hidden = false;
   $("#updBar").style.width = Math.round(p * 100) + "%";
@@ -2136,6 +2173,7 @@ function onUpdateProgress(p) {
 $("#updNow").onclick = async () => {
   const r = upd.release;
   if (!r || !r.download || upd.busy) return;
+  stopCountdown();
   upd.busy = true;
   $("#updNow").disabled = $("#updLater").disabled = true;
   onUpdateProgress(0);
@@ -2148,13 +2186,16 @@ $("#updNow").onclick = async () => {
   }
 };
 $("#updLater").onclick = () => {
+  if (upd.countdown) { stopCountdown(); upd.declined = true; $("#updModal").hidden = true; return; }
   if (upd.release) { S.settings.skipUpdate = upd.release.latest; store.save(); }
   $("#updModal").hidden = true;
 };
 $("#updPage").onclick = (e) => { e.preventDefault(); if (upd.release && upd.release.page) host.open(upd.release.page); };
 $("#updRepo").onclick = (e) => { e.preventDefault(); host.open(upd.info ? upd.info.repo : "https://github.com/rawified/RoLauncher"); };
 $("#updCheck").onclick = () => checkForUpdate(true);
-$("#setAutoUpdate").onchange = (e) => { S.settings.autoUpdate = e.target.checked; store.save(); };
+$("#setAutoUpdate").onchange = (e) => { S.settings.autoUpdate = e.target.checked; $("#setAutoInstall").disabled = !e.target.checked; store.save(); };
+$("#setAutoInstall").onchange = (e) => { S.settings.autoInstall = e.target.checked; store.save(); };
+setInterval(() => { if (S.settings.autoUpdate !== false) checkForUpdate(false); }, UPD_RECHECK);
 
 /* =========================================================
    Boot

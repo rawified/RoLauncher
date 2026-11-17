@@ -119,7 +119,7 @@ You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) on Windows.
 git clone https://github.com/rawified/RoLauncher.git
 cd RoLauncher
 dotnet run                                   # run the launcher
-.\build-installer.ps1 -Version 1.1.0         # build dist\RoLauncherSetup-1.1.0.exe
+.\build-installer.ps1 -Version 1.2.0         # build dist\RoLauncherSetup-1.2.0.exe
 ```
 
 ### Publishing an update

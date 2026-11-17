@@ -196,6 +196,7 @@
           <svg viewBox="0 0 24 24"><use href="#i-search"/></svg>
           <input id="marketInput" placeholder="Search items, bundles, emotes…" autocomplete="off" />
           <select id="marketSort">
+            <option value="0">Relevance</option>
             <option value="1">Most Favorited</option>
             <option value="2">Bestselling</option>
             <option value="3">Recently Updated</option>
@@ -344,7 +345,8 @@
           <div class="set-card">
             <h3>Updates</h3>
             <p class="muted" id="updVersion">RoLauncher</p>
-            <label class="toggle"><input type="checkbox" id="setAutoUpdate" /><span></span>Check for updates when RoLauncher starts</label>
+            <label class="toggle"><input type="checkbox" id="setAutoUpdate" /><span></span>Check for updates automatically</label>
+            <label class="toggle"><input type="checkbox" id="setAutoInstall" /><span></span>Install updates automatically (waits until you're not playing)</label>
             <div class="upd-row"><button class="btn ghost" id="updCheck">Check for updates</button><span class="muted small" id="updStatus"></span></div>
             <p class="muted small">Updates come from <a href="#" id="updRepo">RoLauncher on GitHub</a>. Your sign-ins and settings are kept.</p>
           </div>
